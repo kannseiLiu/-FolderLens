@@ -8,7 +8,7 @@
 
 import Foundation
 
-struct Experiment: Identifiable {
+struct Experiment: Identifiable ,Hashable{
     let id = UUID()
     let project: String
     let experiment: String

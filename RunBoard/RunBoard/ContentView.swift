@@ -44,6 +44,8 @@ struct ContentView: View {
         )
     ]
     
+    @State private var selectedExperiment: Experiment?
+    
     var body: some View {
         NavigationSplitView{
             List(experiments) {experiment in
