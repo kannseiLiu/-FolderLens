@@ -2,7 +2,10 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
-    @State private var selectedFolderURL: URL?
+    @State private var rootFolderURL: URL?
+    @State private var currentFolderURL: URL?
+    @State private var folderHistory: [URL] = []
+
     @State private var files: [FileItem] = []
     @State private var selectedFile: FileItem?
 
@@ -14,13 +17,35 @@ struct ContentView: View {
                 }
                 .padding(.top)
 
-                if let selectedFolderURL {
-                    Text(selectedFolderURL.path)
+                if let currentFolderURL {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current folder")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(currentFolderURL.path)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    .padding(.horizontal)
+                }
+
+                HStack {
+                    Button {
+                        goBack()
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                    }
+                    .disabled(folderHistory.isEmpty)
+
+                    Spacer()
+
+                    Text("\(files.count) items")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.horizontal)
                 }
+                .padding(.horizontal)
 
                 List(files, selection: $selectedFile) { file in
                     HStack {
@@ -35,9 +60,19 @@ struct ContentView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+
+                        if file.isDirectory {
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .padding(.vertical, 4)
                     .tag(file)
+                    .onTapGesture {
+                        handleSelection(file)
+                    }
                 }
             }
             .navigationTitle("LabShelf")
@@ -59,10 +94,40 @@ struct ContentView: View {
         panel.allowsMultipleSelection = false
 
         if panel.runModal() == .OK, let url = panel.url {
-            selectedFolderURL = url
+            rootFolderURL = url
+            currentFolderURL = url
+            folderHistory = []
             selectedFile = nil
             loadFiles(from: url)
         }
+    }
+
+    private func handleSelection(_ file: FileItem) {
+        if file.isDirectory {
+            openFolder(file.url)
+        } else {
+            selectedFile = file
+        }
+    }
+
+    private func openFolder(_ folderURL: URL) {
+        if let currentFolderURL {
+            folderHistory.append(currentFolderURL)
+        }
+
+        currentFolderURL = folderURL
+        selectedFile = nil
+        loadFiles(from: folderURL)
+    }
+
+    private func goBack() {
+        guard let previousFolder = folderHistory.popLast() else {
+            return
+        }
+
+        currentFolderURL = previousFolder
+        selectedFile = nil
+        loadFiles(from: previousFolder)
     }
 
     private func loadFiles(from folderURL: URL) {
