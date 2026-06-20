@@ -27,4 +27,12 @@ struct FileItem: Identifiable, Hashable {
 
         return fileExtension.uppercased() + " file"
     }
+
+    var isImage: Bool {
+        ["png", "jpg", "jpeg"].contains(fileExtension)
+    }
+
+    var isTextLike: Bool {
+        ["txt", "md", "json", "csv", "log"].contains(fileExtension)
+    }
 }

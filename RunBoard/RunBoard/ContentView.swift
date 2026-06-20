@@ -1,8 +1,10 @@
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @State private var selectedFolderURL: URL?
     @State private var files: [FileItem] = []
+    @State private var selectedFile: FileItem?
 
     var body: some View {
         NavigationSplitView {
@@ -20,9 +22,9 @@ struct ContentView: View {
                         .padding(.horizontal)
                 }
 
-                List(files) { file in
+                List(files, selection: $selectedFile) { file in
                     HStack {
-                        Image(systemName: file.isDirectory ? "folder" : "doc")
+                        Image(systemName: iconName(for: file))
                             .foregroundStyle(file.isDirectory ? .blue : .secondary)
 
                         VStack(alignment: .leading) {
@@ -35,29 +37,18 @@ struct ContentView: View {
                         }
                     }
                     .padding(.vertical, 4)
+                    .tag(file)
                 }
             }
             .navigationTitle("LabShelf")
         } detail: {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("LabShelf")
-                    .font(.largeTitle)
-                    .bold()
-
-                Text("Browse local scientific experiment folders.")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-
-                Divider()
-
-                Text("Select a folder from the sidebar to inspect experiment results, figures, logs, and configs.")
-                    .foregroundStyle(.secondary)
-
-                Spacer()
+            if let selectedFile {
+                FilePreviewView(file: selectedFile)
+            } else {
+                WelcomeView()
             }
-            .padding(32)
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 1000, minHeight: 650)
     }
 
     private func selectFolder() {
@@ -69,6 +60,7 @@ struct ContentView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             selectedFolderURL = url
+            selectedFile = nil
             loadFiles(from: url)
         }
     }
@@ -83,12 +75,11 @@ struct ContentView: View {
 
             files = urls.map { url in
                 let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
-                let isDirectory = resourceValues?.isDirectory ?? false
 
                 return FileItem(
                     url: url,
                     name: url.lastPathComponent,
-                    isDirectory: isDirectory
+                    isDirectory: resourceValues?.isDirectory ?? false
                 )
             }
             .sorted { first, second in
@@ -100,6 +91,21 @@ struct ContentView: View {
         } catch {
             print("Failed to load files: \(error)")
             files = []
+        }
+    }
+
+    private func iconName(for file: FileItem) -> String {
+        if file.isDirectory {
+            return "folder"
+        }
+
+        switch file.fileExtension {
+        case "png", "jpg", "jpeg":
+            return "photo"
+        case "txt", "md", "json", "csv", "log":
+            return "doc.text"
+        default:
+            return "doc"
         }
     }
 }
