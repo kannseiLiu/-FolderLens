@@ -9,7 +9,18 @@ struct ContentView: View {
     @State private var files: [FileItem] = []
     @State private var selectedFile: FileItem?
     @State private var currentFolderSummary: FolderSummary?
+    @State private var searchText: String = ""
 
+    private var filteredFiles: [FileItem] {
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return files
+        }
+
+        return files.filter { file in
+            file.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 12) {
@@ -17,7 +28,11 @@ struct ContentView: View {
                     selectFolder()
                 }
                 .padding(.top)
-
+                
+                TextField("Search files...", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .padding(.horizontal)
+                
                 if let currentFolderURL {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Current folder")
@@ -42,13 +57,13 @@ struct ContentView: View {
 
                     Spacer()
 
-                    Text("\(files.count) items")
+                    Text("\(filteredFiles.count) / \(files.count) items")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal)
 
-                List(files, selection: $selectedFile) { file in
+                List(filteredFiles, selection: $selectedFile) { file in
                     HStack {
                         Image(systemName: iconName(for: file))
                             .foregroundStyle(file.isDirectory ? .blue : .secondary)
@@ -101,6 +116,7 @@ struct ContentView: View {
             currentFolderURL = url
             folderHistory = []
             selectedFile = nil
+            searchText = ""
             loadFiles(from: url)
         }
     }
@@ -120,6 +136,7 @@ struct ContentView: View {
 
         currentFolderURL = folderURL
         selectedFile = nil
+        searchText = ""
         loadFiles(from: folderURL)
     }
 
@@ -130,6 +147,7 @@ struct ContentView: View {
 
         currentFolderURL = previousFolder
         selectedFile = nil
+        searchText = ""
         loadFiles(from: previousFolder)
     }
 
