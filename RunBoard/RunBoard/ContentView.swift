@@ -1,87 +1,109 @@
-//
-//  ContentView.swift
-//  RunBoard
-//
-//  Created by sheng on 2026/06/18.
-//
-
 import SwiftUI
 
 struct ContentView: View {
-    let experiments: [Experiment] = [
-        Experiment(
-            project: "CAMELS",
-            experiment: "z2_qfrac_sigma8",
-            model: "Ridge",
-            trainSuite: "TNG",
-            testSuite: "SIMBA",
-            target: "sigma8",
-            metric: "R2",
-            value: 0.664,
-            date: "2026-06-18"
-        ),
-        Experiment(
-            project: "CAMELS",
-            experiment: "z0z2_all_sigma8",
-            model: "RandomForest",
-            trainSuite: "TNG",
-            testSuite: "SIMBA",
-            target: "sigma8",
-            metric: "R2",
-            value: 0.744,
-            date: "2026-06-18"
-        ),
-        Experiment(
-            project: "TNG300",
-            experiment: "quench_2gyr",
-            model: "XGBoost",
-            trainSuite: "host_split",
-            testSuite: "test",
-            target: "quenching",
-            metric: "AUC",
-            value: 0.929,
-            date: "2026-05-01"
-        )
-    ]
-    
-    @State private var selectedExperiment: Experiment?
-    
+    @State private var selectedFolderURL: URL?
+    @State private var files: [FileItem] = []
+
     var body: some View {
-        NavigationSplitView{
-            List(experiments) {experiment in
-                VStack(alignment: .leading, spacing: 4){
-                    Text(experiment.experiment)
-                        .font(.headline)
-                    
-                    Text("\(experiment.project) · \(experiment.model)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        NavigationSplitView {
+            VStack(spacing: 12) {
+                Button("Select Experiment Folder") {
+                    selectFolder()
                 }
-                .padding(.vertical,4)
+                .padding(.top)
+
+                if let selectedFolderURL {
+                    Text(selectedFolderURL.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.horizontal)
+                }
+
+                List(files) { file in
+                    HStack {
+                        Image(systemName: file.isDirectory ? "folder" : "doc")
+                            .foregroundStyle(file.isDirectory ? .blue : .secondary)
+
+                        VStack(alignment: .leading) {
+                            Text(file.name)
+                                .font(.headline)
+
+                            Text(file.typeDescription)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
             }
-            .navigationTitle("Experiment")
-        }detail:{
-            VStack(alignment:.leading , spacing: 16){
-                Text("RunBoard")
+            .navigationTitle("LabShelf")
+        } detail: {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("LabShelf")
                     .font(.largeTitle)
                     .bold()
-                Text("A macOS dashboard for tracking scientific ML experiments")
+
+                Text("Browse local scientific experiment folders.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
-                
+
                 Divider()
-                
-                Text("Select an experiment from the sidebar.")
+
+                Text("Select a folder from the sidebar to inspect experiment results, figures, logs, and configs.")
                     .foregroundStyle(.secondary)
-                
+
                 Spacer()
             }
-            .padding()
+            .padding(32)
         }
-        .frame(minWidth: 900, minHeight:600)
+        .frame(minWidth: 900, minHeight: 600)
+    }
+
+    private func selectFolder() {
+        let panel = NSOpenPanel()
+        panel.title = "Select Experiment Folder"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+
+        if panel.runModal() == .OK, let url = panel.url {
+            selectedFolderURL = url
+            loadFiles(from: url)
+        }
+    }
+
+    private func loadFiles(from folderURL: URL) {
+        do {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: folderURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            files = urls.map { url in
+                let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
+                let isDirectory = resourceValues?.isDirectory ?? false
+
+                return FileItem(
+                    url: url,
+                    name: url.lastPathComponent,
+                    isDirectory: isDirectory
+                )
+            }
+            .sorted { first, second in
+                if first.isDirectory != second.isDirectory {
+                    return first.isDirectory && !second.isDirectory
+                }
+                return first.name.lowercased() < second.name.lowercased()
+            }
+        } catch {
+            print("Failed to load files: \(error)")
+            files = []
+        }
     }
 }
 
-#Preview{
+#Preview {
     ContentView()
 }
