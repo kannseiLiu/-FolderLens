@@ -8,6 +8,7 @@ struct ContentView: View {
 
     @State private var files: [FileItem] = []
     @State private var selectedFile: FileItem?
+    @State private var currentFolderSummary: FolderSummary?
 
     var body: some View {
         NavigationSplitView {
@@ -79,6 +80,8 @@ struct ContentView: View {
         } detail: {
             if let selectedFile {
                 FilePreviewView(file: selectedFile)
+            } else if let currentFolderSummary {
+                FolderSummaryView(summary: currentFolderSummary)
             } else {
                 WelcomeView()
             }
@@ -138,7 +141,7 @@ struct ContentView: View {
                 options: [.skipsHiddenFiles]
             )
 
-            files = urls.map { url in
+            let loadedFiles = urls.map { url in
                 let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
 
                 return FileItem(
@@ -147,15 +150,20 @@ struct ContentView: View {
                     isDirectory: resourceValues?.isDirectory ?? false
                 )
             }
-            .sorted { first, second in
+
+            files = loadedFiles.sorted { first, second in
                 if first.isDirectory != second.isDirectory {
                     return first.isDirectory && !second.isDirectory
                 }
                 return first.name.lowercased() < second.name.lowercased()
             }
+
+            currentFolderSummary = makeSummary(for: folderURL, files: loadedFiles)
+
         } catch {
             print("Failed to load files: \(error)")
             files = []
+            currentFolderSummary = nil
         }
     }
 
@@ -172,6 +180,32 @@ struct ContentView: View {
         default:
             return "doc"
         }
+    }
+
+    private func makeSummary(for folderURL: URL, files: [FileItem]) -> FolderSummary {
+        let folderCount = files.filter { $0.isDirectory }.count
+        let imageCount = files.filter { $0.isImage }.count
+        let csvCount = files.filter { $0.fileExtension == "csv" }.count
+        let jsonCount = files.filter { $0.fileExtension == "json" }.count
+        let textCount = files.filter {
+            ["txt", "md"].contains($0.fileExtension)
+        }.count
+        let logCount = files.filter { $0.fileExtension == "log" }.count
+
+        let knownCount = folderCount + imageCount + csvCount + jsonCount + textCount + logCount
+        let otherCount = max(files.count - knownCount, 0)
+
+        return FolderSummary(
+            folderURL: folderURL,
+            totalCount: files.count,
+            folderCount: folderCount,
+            imageCount: imageCount,
+            csvCount: csvCount,
+            jsonCount: jsonCount,
+            textCount: textCount,
+            logCount: logCount,
+            otherCount: otherCount
+        )
     }
 }
 
