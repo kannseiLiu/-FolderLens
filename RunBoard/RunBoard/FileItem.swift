@@ -11,6 +11,8 @@ struct FileItem: Identifiable, Hashable {
     let url: URL
     let name: String
     let isDirectory: Bool
+    let size: Int64
+    let modifiedDate: Date?
 
     var fileExtension: String {
         url.pathExtension.lowercased()
@@ -29,10 +31,25 @@ struct FileItem: Identifiable, Hashable {
     }
 
     var isImage: Bool {
-        ["png", "jpg", "jpeg"].contains(fileExtension)
+        ["png", "jpg", "jpeg", "heic", "webp", "gif"].contains(fileExtension)
     }
 
     var isTextLike: Bool {
-        ["txt", "md", "json", "csv", "log"].contains(fileExtension)
+        ["txt", "md", "json", "csv", "log", "swift", "py", "js", "html", "css", "tex"].contains(fileExtension)
+    }
+
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: size, countStyle: .file)
+    }
+
+    var formattedModifiedDate: String {
+        guard let modifiedDate else {
+            return "Unknown"
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter.string(from: modifiedDate)
     }
 }

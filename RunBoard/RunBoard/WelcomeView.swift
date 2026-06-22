@@ -9,17 +9,17 @@ import SwiftUI
 struct WelcomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("LabShelf")
+            Text("FolderLens")
                 .font(.largeTitle)
                 .bold()
 
-            Text("Browse local scientific experiment folders.")
+            Text("Inspect, preview, and summarize local folders.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
 
             Divider()
 
-            Text("Select a folder, then click a file to preview figures, logs, configs, and result tables.")
+            Text("Select a folder to see file type statistics, large files, recent files, and previews.")
                 .foregroundStyle(.secondary)
 
             Spacer()

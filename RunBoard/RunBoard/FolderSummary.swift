@@ -15,9 +15,20 @@ struct FolderSummary {
     let jsonCount: Int
     let textCount: Int
     let logCount: Int
+    let pdfCount: Int
+    let archiveCount: Int
+    let videoCount: Int
+    let codeCount: Int
     let otherCount: Int
+    let totalSize: Int64
+    let largestFiles: [FileItem]
+    let recentFiles: [FileItem]
 
     var folderName: String {
         folderURL.lastPathComponent
+    }
+
+    var formattedTotalSize: String {
+        ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
     }
 }

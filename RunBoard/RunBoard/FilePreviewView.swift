@@ -11,58 +11,80 @@ struct FilePreviewView: View {
     let file: FileItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                header
 
-            Divider()
+                if file.isDirectory {
+                    folderPreview
+                } else if file.isImage {
+                    imagePreview
+                } else if file.isTextLike {
+                    textPreview
+                } else {
+                    unsupportedPreview
+                }
+            }
+            .padding(32)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
 
-            if file.isDirectory {
-                folderPreview
-            } else if file.isImage {
-                imagePreview
-            } else if file.isTextLike {
-                textPreview
-            } else {
-                unsupportedPreview
+    private var header: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: headerIcon)
+                .font(.system(size: 34))
+                .foregroundStyle(file.isDirectory ? .blue : .secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(file.name)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .lineLimit(2)
+
+                Text(file.url.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+
+                HStack(spacing: 10) {
+                    Badge(text: file.typeDescription)
+
+                    if !file.isDirectory {
+                        Badge(text: file.formattedSize)
+                    }
+
+                    Badge(text: file.formattedModifiedDate)
+                }
+                .padding(.top, 4)
             }
 
             Spacer()
         }
-        .padding(32)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(file.name)
-                .font(.largeTitle)
-                .bold()
-
-            Text(file.url.path)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
     }
 
     private var folderPreview: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Folder", systemImage: "folder")
-                .font(.title2)
+        CardView {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Folder", systemImage: "folder")
+                    .font(.title2)
+                    .bold()
 
-            Text("Folder navigation will be added next.")
-                .foregroundStyle(.secondary)
+                Text("Open this folder from the sidebar to inspect its contents.")
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var imagePreview: some View {
-        Group {
+        CardView {
             if let nsImage = NSImage(contentsOf: file.url) {
-                ScrollView {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                }
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             } else {
                 Text("Could not load image.")
                     .foregroundStyle(.secondary)
@@ -71,14 +93,12 @@ struct FilePreviewView: View {
     }
 
     private var textPreview: some View {
-        Group {
+        CardView {
             if let text = try? String(contentsOf: file.url, encoding: .utf8) {
-                ScrollView {
-                    Text(text)
-                        .font(.system(.body, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                }
+                Text(text)
+                    .font(.system(.body, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             } else {
                 Text("Could not read text file.")
                     .foregroundStyle(.secondary)
@@ -87,13 +107,58 @@ struct FilePreviewView: View {
     }
 
     private var unsupportedPreview: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Unsupported file type", systemImage: "doc")
-                .font(.title2)
+        CardView {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Preview unavailable", systemImage: "doc")
+                    .font(.title2)
+                    .bold()
 
-            Text("Preview is currently available for PNG, JPG, TXT, Markdown, JSON, CSV, and LOG files.")
-                .foregroundStyle(.secondary)
+                Text("FolderLens currently supports previewing images and text-like files.")
+                    .foregroundStyle(.secondary)
+
+                Text("Supported: PNG, JPG, HEIC, WEBP, GIF, TXT, Markdown, JSON, CSV, LOG, Swift, Python, JavaScript, HTML, CSS, and LaTeX.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    private var headerIcon: String {
+        if file.isDirectory {
+            return "folder.fill"
+        }
+
+        if file.isImage {
+            return "photo"
+        }
+
+        if file.isTextLike {
+            return "doc.text"
+        }
+
+        switch file.fileExtension {
+        case "pdf":
+            return "doc.richtext"
+        case "mp4", "mov", "avi", "mkv":
+            return "film"
+        case "zip", "tar", "gz", "rar", "7z":
+            return "archivebox"
+        default:
+            return "doc"
+        }
+    }
+}
+
+struct Badge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.thinMaterial)
+            .clipShape(Capsule())
     }
 }
 
@@ -102,7 +167,9 @@ struct FilePreviewView: View {
         file: FileItem(
             url: URL(fileURLWithPath: "/tmp/example.txt"),
             name: "example.txt",
-            isDirectory: false
+            isDirectory: false,
+            size: 1024,
+            modifiedDate: Date()
         )
     )
 }

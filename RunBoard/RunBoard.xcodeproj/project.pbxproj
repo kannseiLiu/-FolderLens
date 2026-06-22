@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B125AFD82FE67CFD003F2479 /* CardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B125AFD72FE67CF8003F2479 /* CardView.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B125AF9E2FE3A235003F2479 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		B125AF8C2FE3A233003F2479 /* RunBoard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RunBoard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B125AF9D2FE3A235003F2479 /* RunBoardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunBoardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B125AFA72FE3A235003F2479 /* RunBoardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunBoardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B125AFD72FE67CF8003F2479 /* CardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		B125AF832FE3A233003F2479 = {
 			isa = PBXGroup;
 			children = (
+				B125AFD72FE67CF8003F2479 /* CardView.swift */,
 				B125AF8E2FE3A233003F2479 /* RunBoard */,
 				B125AFA02FE3A235003F2479 /* RunBoardTests */,
 				B125AFAA2FE3A235003F2479 /* RunBoardUITests */,
@@ -236,6 +242,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B125AFD82FE67CFD003F2479 /* CardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
