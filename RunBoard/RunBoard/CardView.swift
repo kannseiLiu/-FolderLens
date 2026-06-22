@@ -2,7 +2,7 @@
 //  CardView.swift
 //  RunBoard
 //
-//  Created by sheng on 2026/06/20.
+//  Created by sheng on 2026/06/22.
 //
 import SwiftUI
 

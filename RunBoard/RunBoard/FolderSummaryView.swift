@@ -2,15 +2,16 @@ import SwiftUI
 
 struct FolderSummaryView: View {
     let summary: FolderSummary
+    let onSelectFile: (FileItem) -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-
                 quickStatsGrid
-
+                fileTypeBreakdownCard
                 largestFilesCard
+                recentFilesCard
             }
             .padding(32)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -19,22 +20,20 @@ struct FolderSummaryView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(.blue)
+        HStack(spacing: 12) {
+            Image(systemName: "folder.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(.blue)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(summary.folderName)
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
+            VStack(alignment: .leading, spacing: 4) {
+                Text(summary.folderName)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
 
-                    Text(summary.folderURL.path)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-                }
+                Text(summary.folderURL.path)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
             }
         }
     }
@@ -57,38 +56,57 @@ struct FolderSummaryView: View {
         }
     }
 
-    private var largestFilesCard: some View {
+    private var fileTypeBreakdownCard: some View {
         CardView {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    Label("Largest Files", systemImage: "chart.bar.doc.horizontal")
-                        .font(.title2)
-                        .bold()
+                Label("File Type Breakdown", systemImage: "chart.pie")
+                    .font(.title2)
+                    .bold()
 
-                    Spacer()
-
-                    Text("Top \(summary.largestFiles.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if summary.largestFiles.isEmpty {
-                    Text("No files found.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(summary.largestFiles.enumerated()), id: \.element.id) { index, file in
-                            LargeFileRow(index: index + 1, file: file)
-
-                            if index != summary.largestFiles.count - 1 {
-                                Divider()
-                                    .padding(.leading, 42)
-                            }
-                        }
-                    }
+                VStack(spacing: 12) {
+                    FileTypeRow(label: "Images", count: summary.imageCount, total: summary.totalCount, icon: "photo")
+                    FileTypeRow(label: "PDFs", count: summary.pdfCount, total: summary.totalCount, icon: "doc.richtext")
+                    FileTypeRow(label: "Code", count: summary.codeCount, total: summary.totalCount, icon: "chevron.left.forwardslash.chevron.right")
+                    FileTypeRow(label: "CSV", count: summary.csvCount, total: summary.totalCount, icon: "tablecells")
+                    FileTypeRow(label: "JSON", count: summary.jsonCount, total: summary.totalCount, icon: "curlybraces")
+                    FileTypeRow(label: "Text", count: summary.textCount, total: summary.totalCount, icon: "doc.text")
+                    FileTypeRow(label: "Logs", count: summary.logCount, total: summary.totalCount, icon: "terminal")
+                    FileTypeRow(label: "Videos", count: summary.videoCount, total: summary.totalCount, icon: "film")
+                    FileTypeRow(label: "Archives", count: summary.archiveCount, total: summary.totalCount, icon: "archivebox")
+                    FileTypeRow(label: "Other", count: summary.otherCount, total: summary.totalCount, icon: "doc")
                 }
             }
         }
+    }
+
+    private var largestFilesCard: some View {
+        FileRankingCard(
+            title: "Largest Files",
+            icon: "chart.bar.doc.horizontal",
+            files: summary.largestFiles,
+            trailingText: { file in
+                file.formattedSize
+            },
+            subtitleText: { file in
+                file.formattedModifiedDate
+            },
+            onSelectFile: onSelectFile
+        )
+    }
+
+    private var recentFilesCard: some View {
+        FileRankingCard(
+            title: "Recently Modified",
+            icon: "clock.arrow.circlepath",
+            files: summary.recentFiles,
+            trailingText: { file in
+                file.formattedModifiedDate
+            },
+            subtitleText: { file in
+                file.formattedSize
+            },
+            onSelectFile: onSelectFile
+        )
     }
 }
 
@@ -121,9 +139,119 @@ struct StatCard: View {
     }
 }
 
-struct LargeFileRow: View {
+struct FileTypeRow: View {
+    let label: String
+    let count: Int
+    let total: Int
+    let icon: String
+
+    private var fraction: Double {
+        guard total > 0 else {
+            return 0
+        }
+
+        return Double(count) / Double(total)
+    }
+
+    private var percentageText: String {
+        guard total > 0 else {
+            return "0%"
+        }
+
+        return "\(Int((fraction * 100).rounded()))%"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .frame(width: 24)
+                .foregroundStyle(.secondary)
+
+            Text(label)
+                .frame(width: 80, alignment: .leading)
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.quaternary)
+
+                    Capsule()
+                        .fill(.blue.opacity(0.75))
+                        .frame(width: max(4, geometry.size.width * fraction))
+                }
+            }
+            .frame(height: 8)
+
+            Text("\(count)")
+                .font(.headline)
+                .frame(width: 40, alignment: .trailing)
+
+            Text(percentageText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .trailing)
+        }
+        .font(.subheadline)
+    }
+}
+
+struct FileRankingCard: View {
+    let title: String
+    let icon: String
+    let files: [FileItem]
+    let trailingText: (FileItem) -> String
+    let subtitleText: (FileItem) -> String
+    let onSelectFile: (FileItem) -> Void
+
+    var body: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Label(title, systemImage: icon)
+                        .font(.title2)
+                        .bold()
+
+                    Spacer()
+
+                    Text("Top \(files.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if files.isEmpty {
+                    Text("No files found.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
+                            Button {
+                                onSelectFile(file)
+                            } label: {
+                                FileRankingRow(
+                                    index: index + 1,
+                                    file: file,
+                                    trailingText: trailingText(file),
+                                    subtitleText: subtitleText(file)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            if index != files.count - 1 {
+                                Divider()
+                                    .padding(.leading, 42)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct FileRankingRow: View {
     let index: Int
     let file: FileItem
+    let trailingText: String
+    let subtitleText: String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -141,14 +269,14 @@ struct LargeFileRow: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                Text(file.formattedModifiedDate)
+                Text(subtitleText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
 
-            Text(file.formattedSize)
+            Text(trailingText)
                 .font(.headline)
                 .foregroundStyle(.primary)
         }
@@ -198,7 +326,7 @@ struct LargeFileRow: View {
             totalSize: 4_800_000_000,
             largestFiles: [],
             recentFiles: []
-        )
+        ),
+        onSelectFile: { _ in }
     )
 }
-

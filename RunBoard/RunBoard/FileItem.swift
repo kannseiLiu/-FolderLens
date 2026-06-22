@@ -35,7 +35,11 @@ struct FileItem: Identifiable, Hashable {
     }
 
     var isTextLike: Bool {
-        ["txt", "md", "json", "csv", "log", "swift", "py", "js", "html", "css", "tex"].contains(fileExtension)
+        [
+            "txt", "md", "json", "csv", "log",
+            "swift", "py", "js", "ts", "html", "css", "tex",
+            "java", "cpp", "c", "h", "rs", "go", "sh"
+        ].contains(fileExtension)
     }
 
     var formattedSize: String {

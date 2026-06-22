@@ -10,8 +10,7 @@ struct WelcomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("FolderLens")
-                .font(.largeTitle)
-                .bold()
+                .font(.system(size: 38, weight: .bold, design: .rounded))
 
             Text("Inspect, preview, and summarize local folders.")
                 .font(.title3)
@@ -19,7 +18,7 @@ struct WelcomeView: View {
 
             Divider()
 
-            Text("Select a folder to see file type statistics, large files, recent files, and previews.")
+            Text("Select a folder to see file type statistics, large files, recent files, previews, and exportable Markdown reports.")
                 .foregroundStyle(.secondary)
 
             Spacer()

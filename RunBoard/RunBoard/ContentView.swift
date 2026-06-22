@@ -23,32 +23,41 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            VStack(spacing: 14) {
-                sidebarHeader
-
-                selectFolderButton
-
-                currentFolderCard
-
-                searchField
-
-                toolbarRow
-
-                Divider()
-
-                fileList
-            }
-            .navigationTitle("")
+            sidebar
         } detail: {
             if let selectedFile {
                 FilePreviewView(file: selectedFile)
             } else if let currentFolderSummary {
-                FolderSummaryView(summary: currentFolderSummary)
+                FolderSummaryView(
+                    summary: currentFolderSummary,
+                    onSelectFile: { file in
+                        selectedFile = file
+                    }
+                )
             } else {
                 WelcomeView()
             }
         }
-        .frame(minWidth: 1000, minHeight: 650)
+        .frame(minWidth: 1100, minHeight: 720)
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 14) {
+            sidebarHeader
+
+            selectFolderButton
+
+            currentFolderCard
+
+            searchField
+
+            toolbarRow
+
+            Divider()
+
+            fileList
+        }
+        .navigationTitle("")
     }
 
     private var sidebarHeader: some View {
@@ -229,21 +238,13 @@ struct ContentView: View {
         do {
             let urls = try FileManager.default.contentsOfDirectory(
                 at: folderURL,
-                includingPropertiesForKeys: [
-                    .isDirectoryKey,
-                    .fileSizeKey,
-                    .contentModificationDateKey
-                ],
+                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
                 options: [.skipsHiddenFiles]
             )
 
             let loadedFiles = urls.map { url in
                 let resourceValues = try? url.resourceValues(
-                    forKeys: [
-                        .isDirectoryKey,
-                        .fileSizeKey,
-                        .contentModificationDateKey
-                    ]
+                    forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
                 )
 
                 let isDirectory = resourceValues?.isDirectory ?? false
@@ -276,59 +277,14 @@ struct ContentView: View {
         }
     }
 
-    private func iconName(for file: FileItem) -> String {
-        if file.isDirectory {
-            return "folder"
-        }
-
-        if file.isImage {
-            return "photo"
-        }
-
-        if file.isTextLike {
-            return "doc.text"
-        }
-
-        switch file.fileExtension {
-        case "pdf":
-            return "doc.richtext"
-        case "mp4", "mov", "avi", "mkv":
-            return "film"
-        case "zip", "tar", "gz", "rar", "7z":
-            return "archivebox"
-        case "csv":
-            return "tablecells"
-        case "json":
-            return "curlybraces"
-        default:
-            return "doc"
-        }
-    }
-
     private func makeSummary(for folderURL: URL, files: [FileItem]) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
-
         let imageCount = files.filter { $0.isImage }.count
-
-        let csvCount = files.filter {
-            $0.fileExtension == "csv"
-        }.count
-
-        let jsonCount = files.filter {
-            $0.fileExtension == "json"
-        }.count
-
-        let textCount = files.filter {
-            ["txt", "md"].contains($0.fileExtension)
-        }.count
-
-        let logCount = files.filter {
-            $0.fileExtension == "log"
-        }.count
-
-        let pdfCount = files.filter {
-            $0.fileExtension == "pdf"
-        }.count
+        let csvCount = files.filter { $0.fileExtension == "csv" }.count
+        let jsonCount = files.filter { $0.fileExtension == "json" }.count
+        let textCount = files.filter { ["txt", "md"].contains($0.fileExtension) }.count
+        let logCount = files.filter { $0.fileExtension == "log" }.count
+        let pdfCount = files.filter { $0.fileExtension == "pdf" }.count
 
         let archiveCount = files.filter {
             ["zip", "tar", "gz", "rar", "7z"].contains($0.fileExtension)
@@ -339,23 +295,19 @@ struct ContentView: View {
         }.count
 
         let codeCount = files.filter {
-            [
-                "swift", "py", "js", "ts", "html", "css",
-                "java", "cpp", "c", "h", "rs", "go", "sh"
-            ].contains($0.fileExtension)
+            ["swift", "py", "js", "ts", "html", "css", "java", "cpp", "c", "h", "rs", "go", "sh"].contains($0.fileExtension)
         }.count
 
-        let knownCount =
-            folderCount +
-            imageCount +
-            csvCount +
-            jsonCount +
-            textCount +
-            logCount +
-            pdfCount +
-            archiveCount +
-            videoCount +
-            codeCount
+        let knownCount = folderCount
+            + imageCount
+            + csvCount
+            + jsonCount
+            + textCount
+            + logCount
+            + pdfCount
+            + archiveCount
+            + videoCount
+            + codeCount
 
         let otherCount = max(files.count - knownCount, 0)
 
@@ -426,7 +378,6 @@ struct ContentView: View {
             if first.isDirectory != second.isDirectory {
                 return first.isDirectory && !second.isDirectory
             }
-
             return first.name.lowercased() < second.name.lowercased()
         }
 
@@ -442,7 +393,6 @@ struct ContentView: View {
 
         let allFileRows = sortedFiles.map { file in
             let sizeText = file.isDirectory ? "-" : file.formattedSize
-
             return "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.typeDescription)) | \(escapeMarkdownTable(sizeText)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
         }
         .joined(separator: "\n")
@@ -507,6 +457,31 @@ struct ContentView: View {
         text
             .replacingOccurrences(of: "|", with: "\\|")
             .replacingOccurrences(of: "\n", with: " ")
+    }
+
+    private func iconName(for file: FileItem) -> String {
+        if file.isDirectory {
+            return "folder"
+        }
+
+        if file.isImage {
+            return "photo"
+        }
+
+        if file.isTextLike {
+            return "doc.text"
+        }
+
+        switch file.fileExtension {
+        case "pdf":
+            return "doc.richtext"
+        case "mp4", "mov", "avi", "mkv":
+            return "film"
+        case "zip", "tar", "gz", "rar", "7z":
+            return "archivebox"
+        default:
+            return "doc"
+        }
     }
 }
 
