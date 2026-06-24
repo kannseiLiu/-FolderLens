@@ -11,6 +11,8 @@ struct FolderSummaryView: View {
 
                 quickStatsGrid
 
+                cleanupSuggestionsCard
+
                 fileTypeBreakdownCard
 
                 largestFilesCard
@@ -144,7 +146,60 @@ struct FolderSummaryView: View {
     }
 
     // MARK: - File Type Breakdown
+    private var cleanupSuggestionsCard: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    SectionHeader(
+                        title: "Cleanup Suggestions",
+                        subtitle: "Safe suggestions only. FolderLens never deletes files automatically.",
+                        icon: "sparkles"
+                    )
 
+                    Spacer()
+
+                    StatusBadge(
+                        text: "\(summary.cleanupCandidateCount) candidates",
+                        systemImage: "exclamationmark.triangle",
+                        isHighlighted: summary.cleanupCandidateCount > 0
+                    )
+                }
+
+                if summary.cleanupCandidateCount == 0 {
+                    EmptyRankingView(text: "No obvious cleanup candidates found.")
+                } else {
+                    VStack(spacing: 16) {
+                        CleanupGroup(
+                            title: "Large files over 100 MB",
+                            icon: "externaldrive.badge.exclamationmark",
+                            files: summary.largeFiles,
+                            trailingText: { $0.formattedSize },
+                            subtitleText: { $0.formattedModifiedDate },
+                            onSelectFile: onSelectFile
+                        )
+
+                        CleanupGroup(
+                            title: "Old files not modified for 1 year",
+                            icon: "clock.badge.exclamationmark",
+                            files: summary.oldFiles,
+                            trailingText: { $0.formattedModifiedDate },
+                            subtitleText: { $0.formattedSize },
+                            onSelectFile: onSelectFile
+                        )
+
+                        CleanupGroup(
+                            title: "Temporary / cache-like files",
+                            icon: "trash",
+                            files: summary.temporaryFiles,
+                            trailingText: { $0.formattedSize },
+                            subtitleText: { $0.formattedModifiedDate },
+                            onSelectFile: onSelectFile
+                        )
+                    }
+                }
+            }
+        }
+    }
     private var fileTypeBreakdownCard: some View {
         CardView {
             VStack(alignment: .leading, spacing: 18) {
@@ -281,7 +336,61 @@ struct FolderSummaryView: View {
         )
     }
 }
+struct CleanupGroup: View {
+    let title: String
+    let icon: String
+    let files: [FileItem]
+    let trailingText: (FileItem) -> String
+    let subtitleText: (FileItem) -> String
+    let onSelectFile: (FileItem) -> Void
 
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.headline)
+
+                Spacer()
+
+                Text("\(files.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if files.isEmpty {
+                Text("No candidates.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 4)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(files.enumerated()), id: \.element.id) { index, file in
+                        Button {
+                            onSelectFile(file)
+                        } label: {
+                            FileRankingRow(
+                                index: index + 1,
+                                file: file,
+                                trailingText: trailingText(file),
+                                subtitleText: subtitleText(file)
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        if index != files.count - 1 {
+                            Divider()
+                                .padding(.leading, 42)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
 // MARK: - Reusable Components
 
 struct SectionHeader: View {
@@ -604,6 +713,9 @@ struct FileRankingRow: View {
             totalSize: 4_800_000_000,
             largestFiles: [],
             recentFiles: [],
+            largeFiles: [],
+            oldFiles: [],
+            temporaryFiles: [],
             isDeepScan: true
         ),
         onSelectFile: { _ in }

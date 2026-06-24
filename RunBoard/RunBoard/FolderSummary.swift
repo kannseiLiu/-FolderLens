@@ -1,9 +1,3 @@
-//
-//  FolderSummary.swift
-//  RunBoard
-//
-//  Created by sheng on 2026/06/20.
-//
 import Foundation
 
 struct FolderSummary {
@@ -23,12 +17,20 @@ struct FolderSummary {
     let totalSize: Int64
     let largestFiles: [FileItem]
     let recentFiles: [FileItem]
+    let largeFiles: [FileItem]
+    let oldFiles: [FileItem]
+    let temporaryFiles: [FileItem]
     let isDeepScan: Bool
+
     var folderName: String {
         folderURL.lastPathComponent
     }
 
     var formattedTotalSize: String {
         ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+    }
+
+    var cleanupCandidateCount: Int {
+        largeFiles.count + oldFiles.count + temporaryFiles.count
     }
 }

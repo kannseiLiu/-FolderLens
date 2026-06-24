@@ -1,6 +1,21 @@
 import SwiftUI
 import AppKit
 
+enum FileFilter: String, CaseIterable, Identifiable {
+    case all = "All"
+    case images = "Images"
+    case pdfs = "PDFs"
+    case videos = "Videos"
+    case archives = "Archives"
+    case code = "Code"
+    case text = "Text"
+    case large = "Large > 100 MB"
+
+    var id: String {
+        rawValue
+    }
+}
+
 struct ContentView: View {
     @State private var rootFolderURL: URL?
     @State private var currentFolderURL: URL?
@@ -11,14 +26,53 @@ struct ContentView: View {
     @State private var currentFolderSummary: FolderSummary?
     @State private var searchText: String = ""
     @State private var isDeepScanEnabled: Bool = false
-    
+    @State private var selectedFilter: FileFilter = .all
+
     private var filteredFiles: [FileItem] {
+        let searchedFiles: [FileItem]
+
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return files
+            searchedFiles = files
+        } else {
+            searchedFiles = files.filter { file in
+                file.name.localizedCaseInsensitiveContains(searchText)
+            }
         }
 
-        return files.filter { file in
-            file.name.localizedCaseInsensitiveContains(searchText)
+        switch selectedFilter {
+        case .all:
+            return searchedFiles
+
+        case .images:
+            return searchedFiles.filter { $0.isImage }
+
+        case .pdfs:
+            return searchedFiles.filter { $0.fileExtension == "pdf" }
+
+        case .videos:
+            return searchedFiles.filter {
+                ["mp4", "mov", "avi", "mkv"].contains($0.fileExtension)
+            }
+
+        case .archives:
+            return searchedFiles.filter {
+                ["zip", "tar", "gz", "rar", "7z"].contains($0.fileExtension)
+            }
+
+        case .code:
+            return searchedFiles.filter {
+                ["swift", "py", "js", "ts", "html", "css", "java", "cpp", "c", "h", "rs", "go", "sh"].contains($0.fileExtension)
+            }
+
+        case .text:
+            return searchedFiles.filter {
+                ["txt", "md", "json", "csv", "log", "tex"].contains($0.fileExtension)
+            }
+
+        case .large:
+            return searchedFiles.filter {
+                !$0.isDirectory && $0.size >= 100 * 1024 * 1024
+            }
         }
     }
 
@@ -45,13 +99,9 @@ struct ContentView: View {
     private var sidebar: some View {
         VStack(spacing: 14) {
             sidebarHeader
-
             selectFolderButton
-
             currentFolderCard
-
-            searchField
-
+            searchAndFilterSection
             toolbarRow
 
             Divider()
@@ -116,10 +166,19 @@ struct ContentView: View {
         }
     }
 
-    private var searchField: some View {
-        TextField("Search files...", text: $searchText)
-            .textFieldStyle(.roundedBorder)
-            .padding(.horizontal)
+    private var searchAndFilterSection: some View {
+        VStack(spacing: 8) {
+            TextField("Search files...", text: $searchText)
+                .textFieldStyle(.roundedBorder)
+
+            Picker("Filter", selection: $selectedFilter) {
+                ForEach(FileFilter.allCases) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+        .padding(.horizontal)
     }
 
     private var toolbarRow: some View {
@@ -214,6 +273,7 @@ struct ContentView: View {
             folderHistory = []
             selectedFile = nil
             searchText = ""
+            selectedFilter = .all
             loadFiles(from: url)
         }
     }
@@ -234,6 +294,7 @@ struct ContentView: View {
         currentFolderURL = folderURL
         selectedFile = nil
         searchText = ""
+        selectedFilter = .all
         loadFiles(from: folderURL)
     }
 
@@ -245,6 +306,7 @@ struct ContentView: View {
         currentFolderURL = previousFolder
         selectedFile = nil
         searchText = ""
+        selectedFilter = .all
         loadFiles(from: previousFolder)
     }
 
@@ -284,7 +346,7 @@ struct ContentView: View {
             currentFolderSummary = nil
         }
     }
-    
+
     private func makeFileItem(from url: URL) -> FileItem {
         let resourceValues = try? url.resourceValues(
             forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
@@ -302,7 +364,7 @@ struct ContentView: View {
             modifiedDate: modifiedDate
         )
     }
-    
+
     private func scanFilesRecursively(from folderURL: URL) -> [FileItem] {
         guard let enumerator = FileManager.default.enumerator(
             at: folderURL,
@@ -321,6 +383,7 @@ struct ContentView: View {
 
         return result
     }
+
     private func makeSummary(for folderURL: URL, files: [FileItem]) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
         let imageCount = files.filter { $0.isImage }.count
@@ -373,7 +436,36 @@ struct ContentView: View {
             }
             .prefix(10)
             .map { $0 }
+        let largeFiles = files
+            .filter { !$0.isDirectory && $0.size >= 100 * 1024 * 1024 }
+            .sorted { $0.size > $1.size }
+            .prefix(10)
+            .map { $0 }
 
+        let oneYearAgo = Calendar.current.date(
+            byAdding: .year,
+            value: -1,
+            to: Date()
+        ) ?? .distantPast
+
+        let oldFiles = files
+            .filter { file in
+                guard !file.isDirectory, let modifiedDate = file.modifiedDate else {
+                    return false
+                }
+
+                return modifiedDate < oneYearAgo
+            }
+            .sorted {
+                ($0.modifiedDate ?? .distantPast) < ($1.modifiedDate ?? .distantPast)
+            }
+            .prefix(10)
+            .map { $0 }
+
+        let temporaryFiles = files
+            .filter { !$0.isDirectory && isTemporaryCandidate($0) }
+            .prefix(10)
+            .map { $0 }
         return FolderSummary(
             folderURL: folderURL,
             totalCount: files.count,
@@ -391,10 +483,40 @@ struct ContentView: View {
             totalSize: totalSize,
             largestFiles: largestFiles,
             recentFiles: recentFiles,
+            largeFiles: largeFiles,
+            oldFiles: oldFiles,
+            temporaryFiles: temporaryFiles,
             isDeepScan: isDeepScanEnabled
         )
     }
+    private func isTemporaryCandidate(_ file: FileItem) -> Bool {
+        let name = file.name.lowercased()
+        let ext = file.fileExtension
 
+        let temporaryExtensions = [
+            "tmp", "temp", "cache", "bak", "old", "swp", "part", "download"
+        ]
+
+        let temporaryNames = [
+            ".ds_store",
+            "thumbs.db",
+            "desktop.ini"
+        ]
+
+        if temporaryExtensions.contains(ext) {
+            return true
+        }
+
+        if temporaryNames.contains(name) {
+            return true
+        }
+
+        if name.contains("cache") || name.contains("backup") || name.contains("temp") {
+            return true
+        }
+
+        return false
+    }
     private func exportMarkdownSummary() {
         guard let summary = currentFolderSummary else {
             return
@@ -435,7 +557,20 @@ struct ContentView: View {
             "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedModifiedDate)) | \(escapeMarkdownTable(file.formattedSize)) |"
         }
         .joined(separator: "\n")
+        let largeCleanupRows = summary.largeFiles.map { file in
+            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
+        }
+        .joined(separator: "\n")
 
+        let oldCleanupRows = summary.oldFiles.map { file in
+            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedModifiedDate)) | \(escapeMarkdownTable(file.formattedSize)) |"
+        }
+        .joined(separator: "\n")
+
+        let temporaryCleanupRows = summary.temporaryFiles.map { file in
+            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
+        }
+        .joined(separator: "\n")
         let allFileRows = sortedFiles.map { file in
             let sizeText = file.isDirectory ? "-" : file.formattedSize
             return "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.typeDescription)) | \(escapeMarkdownTable(sizeText)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
@@ -448,6 +583,8 @@ struct ContentView: View {
         Generated at: \(generatedAt)
 
         Path: `\(summary.folderURL.path)`
+
+        Scan mode: \(summary.isDeepScan ? "Deep Scan" : "Current folder only")
 
         ## Overview
 
@@ -466,7 +603,28 @@ struct ContentView: View {
         | Videos | \(summary.videoCount) |
         | Archives | \(summary.archiveCount) |
         | Other files | \(summary.otherCount) |
+        
+        ## Cleanup Suggestions
 
+        FolderLens only provides safe suggestions and never deletes files automatically.
+
+        ### Large files over 100 MB
+
+        | Name | Size | Modified |
+        |---|---:|---|
+        \(largeCleanupRows.isEmpty ? "| No candidates | - | - |" : largeCleanupRows)
+
+        ### Old files not modified for 1 year
+
+        | Name | Modified | Size |
+        |---|---|---:|
+        \(oldCleanupRows.isEmpty ? "| No candidates | - | - |" : oldCleanupRows)
+
+        ### Temporary / cache-like files
+
+        | Name | Size | Modified |
+        |---|---:|---|
+        \(temporaryCleanupRows.isEmpty ? "| No candidates | - | - |" : temporaryCleanupRows)
         ## Largest Files
 
         | Name | Size | Modified |
