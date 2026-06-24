@@ -10,10 +10,14 @@ import AppKit
 struct FilePreviewView: View {
     let file: FileItem
 
+    @State private var copiedPath = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
+
+                actionBar
 
                 if file.isDirectory {
                     folderPreview
@@ -64,6 +68,33 @@ struct FilePreviewView: View {
         }
     }
 
+    private var actionBar: some View {
+        CardView {
+            HStack(spacing: 12) {
+                Button {
+                    openFile()
+                } label: {
+                    Label("Open", systemImage: "arrow.up.right.square")
+                }
+
+                Button {
+                    revealInFinder()
+                } label: {
+                    Label("Reveal in Finder", systemImage: "finder")
+                }
+
+                Button {
+                    copyPath()
+                } label: {
+                    Label(copiedPath ? "Copied" : "Copy Path", systemImage: copiedPath ? "checkmark" : "doc.on.doc")
+                }
+
+                Spacer()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
     private var folderPreview: some View {
         CardView {
             VStack(alignment: .leading, spacing: 10) {
@@ -71,7 +102,7 @@ struct FilePreviewView: View {
                     .font(.title2)
                     .bold()
 
-                Text("Open this folder from the sidebar to inspect its contents.")
+                Text("Use Open to open this folder in Finder, or Reveal in Finder to locate it.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -113,13 +144,32 @@ struct FilePreviewView: View {
                     .font(.title2)
                     .bold()
 
-                Text("FolderLens currently supports previewing images and text-like files.")
+                Text("FolderLens cannot preview this file type yet, but you can still open it, reveal it in Finder, or copy its path.")
                     .foregroundStyle(.secondary)
 
-                Text("Supported: PNG, JPG, HEIC, WEBP, GIF, TXT, Markdown, JSON, CSV, LOG, Swift, Python, JavaScript, HTML, CSS, and LaTeX.")
+                Text("Supported previews: PNG, JPG, HEIC, WEBP, GIF, TXT, Markdown, JSON, CSV, LOG, Swift, Python, JavaScript, HTML, CSS, and LaTeX.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func openFile() {
+        NSWorkspace.shared.open(file.url)
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+    }
+
+    private func copyPath() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(file.url.path, forType: .string)
+
+        copiedPath = true
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            copiedPath = false
         }
     }
 
