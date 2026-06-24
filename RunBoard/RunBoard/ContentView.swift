@@ -10,7 +10,8 @@ struct ContentView: View {
     @State private var selectedFile: FileItem?
     @State private var currentFolderSummary: FolderSummary?
     @State private var searchText: String = ""
-
+    @State private var isDeepScanEnabled: Bool = false
+    
     private var filteredFiles: [FileItem] {
         if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return files
@@ -122,26 +123,39 @@ struct ContentView: View {
     }
 
     private var toolbarRow: some View {
-        HStack {
-            Button {
-                goBack()
-            } label: {
-                Label("Back", systemImage: "chevron.left")
+        VStack(spacing: 10) {
+            HStack {
+                Button {
+                    goBack()
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .disabled(folderHistory.isEmpty)
+
+                Button {
+                    exportMarkdownSummary()
+                } label: {
+                    Label("Report", systemImage: "square.and.arrow.down")
+                }
+                .disabled(currentFolderURL == nil || currentFolderSummary == nil)
+
+                Spacer()
+
+                Text("\(filteredFiles.count) / \(files.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .disabled(folderHistory.isEmpty)
 
-            Button {
-                exportMarkdownSummary()
-            } label: {
-                Label("Report", systemImage: "square.and.arrow.down")
+            Toggle(isOn: $isDeepScanEnabled) {
+                Label("Deep Scan", systemImage: "scope")
             }
-            .disabled(currentFolderURL == nil || currentFolderSummary == nil)
-
-            Spacer()
-
-            Text("\(filteredFiles.count) / \(files.count)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .toggleStyle(.switch)
+            .onChange(of: isDeepScanEnabled) { _ in
+                if let currentFolderURL {
+                    selectedFile = nil
+                    loadFiles(from: currentFolderURL)
+                }
+            }
         }
         .padding(.horizontal)
     }
@@ -243,21 +257,7 @@ struct ContentView: View {
             )
 
             let loadedFiles = urls.map { url in
-                let resourceValues = try? url.resourceValues(
-                    forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
-                )
-
-                let isDirectory = resourceValues?.isDirectory ?? false
-                let fileSize = Int64(resourceValues?.fileSize ?? 0)
-                let modifiedDate = resourceValues?.contentModificationDate
-
-                return FileItem(
-                    url: url,
-                    name: url.lastPathComponent,
-                    isDirectory: isDirectory,
-                    size: fileSize,
-                    modifiedDate: modifiedDate
-                )
+                makeFileItem(from: url)
             }
 
             files = loadedFiles.sorted { first, second in
@@ -268,7 +268,15 @@ struct ContentView: View {
                 return first.name.lowercased() < second.name.lowercased()
             }
 
-            currentFolderSummary = makeSummary(for: folderURL, files: loadedFiles)
+            let summaryFiles: [FileItem]
+
+            if isDeepScanEnabled {
+                summaryFiles = scanFilesRecursively(from: folderURL)
+            } else {
+                summaryFiles = loadedFiles
+            }
+
+            currentFolderSummary = makeSummary(for: folderURL, files: summaryFiles)
 
         } catch {
             print("Failed to load files: \(error)")
@@ -276,7 +284,43 @@ struct ContentView: View {
             currentFolderSummary = nil
         }
     }
+    
+    private func makeFileItem(from url: URL) -> FileItem {
+        let resourceValues = try? url.resourceValues(
+            forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
+        )
 
+        let isDirectory = resourceValues?.isDirectory ?? false
+        let fileSize = Int64(resourceValues?.fileSize ?? 0)
+        let modifiedDate = resourceValues?.contentModificationDate
+
+        return FileItem(
+            url: url,
+            name: url.lastPathComponent,
+            isDirectory: isDirectory,
+            size: fileSize,
+            modifiedDate: modifiedDate
+        )
+    }
+    
+    private func scanFilesRecursively(from folderURL: URL) -> [FileItem] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: folderURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var result: [FileItem] = []
+
+        for case let url as URL in enumerator {
+            let item = makeFileItem(from: url)
+            result.append(item)
+        }
+
+        return result
+    }
     private func makeSummary(for folderURL: URL, files: [FileItem]) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
         let imageCount = files.filter { $0.isImage }.count
@@ -346,7 +390,8 @@ struct ContentView: View {
             otherCount: otherCount,
             totalSize: totalSize,
             largestFiles: largestFiles,
-            recentFiles: recentFiles
+            recentFiles: recentFiles,
+            isDeepScan: isDeepScanEnabled
         )
     }
 

@@ -23,7 +23,7 @@ struct FolderSummary {
     let totalSize: Int64
     let largestFiles: [FileItem]
     let recentFiles: [FileItem]
-
+    let isDeepScan: Bool
     var folderName: String {
         folderURL.lastPathComponent
     }
