@@ -13,8 +13,7 @@ FolderLens is moving toward a practical, polished macOS utility for local folder
 
 ## Product Improvements
 
-- Upgrade duplicate detection from name/size matching to optional content hashing.
-- Add scan progress and cancellation for very large directories.
+- Upgrade duplicate detection from name/size matching to trusted SHA-256 content verification.
 - Add export options for CSV and JSON.
 - Add reusable scan presets for common workflows such as Downloads cleanup, project audit, and photo archive review.
 

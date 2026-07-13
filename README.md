@@ -12,6 +12,7 @@ It helps you answer the questions Finder does not surface quickly: what is takin
 - Browse folders, preview images and text-like files, and open items in Finder.
 - Search by file name and filter by images, PDFs, videos, archives, code, text, and large files.
 - Toggle Deep Scan to analyze nested folders recursively.
+- Scan large folders in the background with live item progress and cancellation.
 - Tune scan settings for large-file thresholds, old-file age, and hidden-file handling.
 - See file type distribution, largest files, recently modified files, and safe cleanup candidates.
 - Get a Folder Health Score with a prioritized action plan.
@@ -46,6 +47,7 @@ Exported Markdown reports include the active settings so the result remains expl
 
 Deep Scan turns FolderLens into a more useful cleanup assistant:
 
+- Keep the interface responsive while FolderLens analyzes nested content.
 - Folder Size Hotspots rank nested folders by total file size.
 - Potential Duplicates group files with the same name and size for manual review.
 - Review Size estimates how much data deserves attention across large, old, temporary, and duplicate candidates.

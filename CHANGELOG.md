@@ -19,6 +19,9 @@ All notable changes to FolderLens will be documented in this file.
 - Added unit tests for healthy and cleanup-heavy folder summaries.
 - Added unit tests for analyzer-generated folder hotspots, duplicate groups, and space estimates.
 - Added unit test coverage for custom cleanup thresholds.
+- Added background folder scanning with live processed-item progress and cancellation.
+- Added protection against stale scan results when folders or settings change.
+- Added user-visible scan warnings and root-folder errors.
 
 ### Changed
 
