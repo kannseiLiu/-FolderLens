@@ -23,9 +23,6 @@ struct FolderScanService: FolderScanning {
         onProgress: @escaping FolderScanProgressHandler
     ) async throws -> FolderScanResult {
         let manager = FileManager.default
-        let options: FileManager.DirectoryEnumerationOptions = context.settings.includeHiddenFiles
-            ? []
-            : [.skipsHiddenFiles]
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey,
             .isSymbolicLinkKey,
@@ -34,50 +31,25 @@ struct FolderScanService: FolderScanning {
         ]
         var warnings: [FolderScanWarning] = []
 
-        let directURLs: [URL]
-        do {
-            directURLs = try manager.contentsOfDirectory(
-                at: context.folderURL,
-                includingPropertiesForKeys: Array(keys),
-                options: options
-            )
-        } catch {
-            throw FolderScanError.rootUnavailable(
-                path: context.folderURL.path,
-                reason: error.localizedDescription
-            )
-        }
-
-        let directChildren = directURLs.compactMap { url -> FileItem? in
-            do {
-                return try makeFileItem(from: url, keys: keys)
-            } catch {
-                warnings.append(.init(path: url.path, message: error.localizedDescription))
-                return nil
-            }
-        }
-        .sorted(by: fileSort)
-
-        guard context.isDeepScan else {
-            try Task.checkCancellation()
-            await onProgress(.init(processedItemCount: directChildren.count))
-            return FolderScanResult(
-                directChildren: directChildren,
-                analysisItems: directChildren,
-                warnings: warnings
-            )
-        }
-
-        var deepOptions: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
+        var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
         if !context.settings.includeHiddenFiles {
-            deepOptions.insert(.skipsHiddenFiles)
+            options.insert(.skipsHiddenFiles)
+        }
+        if !context.isDeepScan {
+            options.insert(.skipsSubdirectoryDescendants)
         }
 
+        let rootURL = context.folderURL.standardizedFileURL
+        var rootError: Error?
         guard let enumerator = manager.enumerator(
             at: context.folderURL,
             includingPropertiesForKeys: Array(keys),
-            options: deepOptions,
+            options: options,
             errorHandler: { url, error in
+                if url.standardizedFileURL == rootURL {
+                    rootError = error
+                    return false
+                }
                 warnings.append(.init(path: url.path, message: error.localizedDescription))
                 return true
             }
@@ -88,6 +60,7 @@ struct FolderScanService: FolderScanning {
             )
         }
 
+        var directChildren: [FileItem] = []
         var analysisItems: [FileItem] = []
         for case let url as URL in enumerator {
             try Task.checkCancellation()
@@ -96,7 +69,11 @@ struct FolderScanService: FolderScanning {
                 if values.isSymbolicLink == true {
                     enumerator.skipDescendants()
                 }
-                analysisItems.append(makeFileItem(url: url, values: values))
+                let item = makeFileItem(url: url, values: values)
+                analysisItems.append(item)
+                if url.deletingLastPathComponent().standardizedFileURL == rootURL {
+                    directChildren.append(item)
+                }
             } catch {
                 warnings.append(.init(path: url.path, message: error.localizedDescription))
             }
@@ -106,18 +83,21 @@ struct FolderScanService: FolderScanning {
             }
         }
 
+        if let rootError {
+            throw FolderScanError.rootUnavailable(
+                path: context.folderURL.path,
+                reason: rootError.localizedDescription
+            )
+        }
         try Task.checkCancellation()
-        await onProgress(.init(processedItemCount: analysisItems.count))
+        let sortedDirectChildren = directChildren.sorted(by: fileSort)
+        let resultAnalysisItems = context.isDeepScan ? analysisItems : sortedDirectChildren
+        await onProgress(.init(processedItemCount: resultAnalysisItems.count))
         return FolderScanResult(
-            directChildren: directChildren,
-            analysisItems: analysisItems,
+            directChildren: sortedDirectChildren,
+            analysisItems: resultAnalysisItems,
             warnings: warnings
         )
-    }
-
-    private func makeFileItem(from url: URL, keys: Set<URLResourceKey>) throws -> FileItem {
-        let values = try url.resourceValues(forKeys: keys)
-        return makeFileItem(url: url, values: values)
     }
 
     private func makeFileItem(url: URL, values: URLResourceValues) -> FileItem {

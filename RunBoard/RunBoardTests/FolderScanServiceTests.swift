@@ -44,6 +44,7 @@ struct FolderScanServiceTests {
 
         let progressValues = await recorder.values
         #expect(result.analysisItems.contains { $0.name == "nested.txt" })
+        #expect(progressValues.map(\.processedItemCount) == progressValues.map(\.processedItemCount).sorted())
         #expect(progressValues.last?.processedItemCount == result.analysisItems.count)
     }
 
@@ -89,7 +90,7 @@ struct FolderScanServiceTests {
 
         await gate.waitUntilPaused()
         scanTask.cancel()
-        await gate.resume()
+        await gate.release()
 
         await #expect(throws: CancellationError.self) {
             _ = try await scanTask.value
@@ -113,10 +114,67 @@ struct FolderScanServiceTests {
 
         await gate.waitUntilPaused()
         scanTask.cancel()
-        await gate.resume()
+        await gate.release()
 
         await #expect(throws: CancellationError.self) {
             _ = try await scanTask.value
+        }
+    }
+
+    @Test func cancellingShallowScanAtIncrementalBatchThrowsCancellation() async throws {
+        let root = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for index in 0..<201 {
+            try Data().write(to: root.appendingPathComponent("file-\(index).txt"))
+        }
+
+        let progressGate = ProgressGate(pauseAt: 100)
+        let outcomeGate = ScanOutcomeGate()
+        let scanTask = Task {
+            try await FolderScanService().scan(
+                context: FolderScanContext(folderURL: root, isDeepScan: false, settings: .default)
+            ) { progress in
+                await progressGate.pause(at: progress)
+            }
+        }
+        let pauseTask = Task {
+            await progressGate.waitUntilPaused()
+            await outcomeGate.record(.paused)
+        }
+        let completionTask = Task {
+            _ = try? await scanTask.value
+            await outcomeGate.record(.scanFinished)
+        }
+
+        let outcome = await outcomeGate.wait()
+        #expect(outcome == .paused)
+
+        guard outcome == .paused else {
+            await progressGate.release()
+            _ = await pauseTask.value
+            _ = await completionTask.value
+            return
+        }
+
+        scanTask.cancel()
+        await progressGate.release()
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await scanTask.value
+        }
+        _ = await pauseTask.value
+        _ = await completionTask.value
+    }
+
+    @Test func missingRootThrowsRootUnavailableError() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("FolderLensTests-Missing-\(UUID().uuidString)", isDirectory: true)
+
+        await #expect(throws: FolderScanError.self) {
+            _ = try await FolderScanService().scan(
+                context: FolderScanContext(folderURL: root, isDeepScan: false, settings: .default)
+            ) { _ in }
         }
     }
 
@@ -235,8 +293,40 @@ private actor ProgressGate {
         }
     }
 
-    func resume() {
+    func release() {
+        pauseWaiter?.resume()
+        pauseWaiter = nil
         resumeWaiter?.resume()
         resumeWaiter = nil
+    }
+}
+
+private actor ScanOutcomeGate {
+    enum Outcome: Equatable {
+        case paused
+        case scanFinished
+    }
+
+    private var outcome: Outcome?
+    private var waiter: CheckedContinuation<Outcome, Never>?
+
+    func record(_ newOutcome: Outcome) {
+        guard outcome == nil else {
+            return
+        }
+
+        outcome = newOutcome
+        waiter?.resume(returning: newOutcome)
+        waiter = nil
+    }
+
+    func wait() async -> Outcome {
+        if let outcome {
+            return outcome
+        }
+
+        return await withCheckedContinuation { continuation in
+            waiter = continuation
+        }
     }
 }
