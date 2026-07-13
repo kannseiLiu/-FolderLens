@@ -9,11 +9,13 @@ struct FolderScanService: FolderScanning {
             try await scanSynchronously(context: context, onProgress: onProgress)
         }
 
-        return try await withTaskCancellationHandler {
+        let result = try await withTaskCancellationHandler {
             try await worker.value
         } onCancel: {
             worker.cancel()
         }
+        try Task.checkCancellation()
+        return result
     }
 
     private func scanSynchronously(

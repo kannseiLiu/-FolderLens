@@ -78,10 +78,34 @@ struct FolderScanServiceTests {
             try Data().write(to: root.appendingPathComponent("file-\(index).txt"))
         }
 
-        let gate = ProgressGate()
+        let gate = ProgressGate(pauseAt: 100)
         let scanTask = Task {
             try await FolderScanService().scan(
                 context: FolderScanContext(folderURL: root, isDeepScan: true, settings: .default)
+            ) { progress in
+                await gate.pause(at: progress)
+            }
+        }
+
+        await gate.waitUntilPaused()
+        scanTask.cancel()
+        await gate.resume()
+
+        await #expect(throws: CancellationError.self) {
+            _ = try await scanTask.value
+        }
+    }
+
+    @Test func cancellingCallerDuringFinalProgressThrowsCancellation() async throws {
+        let root = try makeTemporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Data("file".utf8).write(to: root.appendingPathComponent("file.txt"))
+
+        let gate = ProgressGate(pauseAt: 1)
+        let scanTask = Task {
+            try await FolderScanService().scan(
+                context: FolderScanContext(folderURL: root, isDeepScan: false, settings: .default)
             ) { progress in
                 await gate.pause(at: progress)
             }
@@ -178,12 +202,17 @@ private actor ProgressRecorder {
 }
 
 private actor ProgressGate {
+    private let pauseAt: Int
     private var hasPaused = false
     private var pauseWaiter: CheckedContinuation<Void, Never>?
     private var resumeWaiter: CheckedContinuation<Void, Never>?
 
+    init(pauseAt: Int) {
+        self.pauseAt = pauseAt
+    }
+
     func pause(at progress: FolderScanProgress) async {
-        guard progress.processedItemCount == 100 else {
+        guard progress.processedItemCount == pauseAt else {
             return
         }
 
