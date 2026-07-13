@@ -45,6 +45,21 @@ struct FolderScanViewModelTests {
         #expect(model.summary == nil)
     }
 
+    @Test func cancelledScanStaysCancelledWhenScannerFailsLate() async throws {
+        let scanner = ControlledScanner()
+        let model = FolderScanViewModel(scanner: scanner)
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Cancel-Failure")
+
+        model.start(context: .init(folderURL: root, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(1)
+        model.cancel()
+        await scanner.failRequest(at: 0)
+        await Task.yield()
+
+        #expect(model.status == .cancelled)
+        #expect(model.progress == nil)
+    }
+
     @Test func newerScanWinsWhenOlderScanCompletesLast() async throws {
         let scanner = ControlledScanner()
         let model = FolderScanViewModel(scanner: scanner)
@@ -66,15 +81,40 @@ struct FolderScanViewModelTests {
         #expect(model.summary?.folderURL == secondRoot)
     }
 
+    @Test func newerCompletedScanStaysCompletedWhenOlderScanFailsLate() async throws {
+        let scanner = ControlledScanner()
+        let model = FolderScanViewModel(scanner: scanner)
+        let firstRoot = URL(fileURLWithPath: "/tmp/FolderLens-First-Failure")
+        let secondRoot = URL(fileURLWithPath: "/tmp/FolderLens-Second-Failure")
+
+        model.start(context: .init(folderURL: firstRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(1)
+        model.start(context: .init(folderURL: secondRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(2)
+
+        await scanner.completeRequest(at: 1, with: result(named: "new.txt", root: secondRoot))
+        await waitUntilSettled(model)
+        await scanner.failRequest(at: 0)
+        await Task.yield()
+
+        #expect(model.status == .completed)
+        #expect(model.files.map(\.name) == ["new.txt"])
+        #expect(model.summary?.folderURL == secondRoot)
+    }
+
     @Test func cancelledRescanKeepsCompletedResultForSameContext() async throws {
         let scanner = ControlledScanner()
         let model = FolderScanViewModel(scanner: scanner)
         let root = URL(fileURLWithPath: "/tmp/FolderLens-Preserve")
         let context = FolderScanContext(folderURL: root, isDeepScan: true, settings: .default)
+        let warning = FolderScanWarning(path: "/tmp/FolderLens-Preserve/denied", message: "Denied")
 
         model.start(context: context)
         await scanner.waitForRequestCount(1)
-        await scanner.completeRequest(at: 0, with: result(named: "kept.txt", root: root))
+        await scanner.completeRequest(
+            at: 0,
+            with: result(named: "kept.txt", root: root, warnings: [warning])
+        )
         await waitUntilSettled(model)
 
         model.start(context: context)
@@ -84,6 +124,7 @@ struct FolderScanViewModelTests {
         #expect(model.status == .cancelled)
         #expect(model.files.map(\.name) == ["kept.txt"])
         #expect(model.summary?.folderURL == root)
+        #expect(model.warnings == [warning])
     }
 
     @Test func contextChangeClearsPreviousCompletedResultWhileNewScanRuns() async throws {
@@ -120,6 +161,28 @@ struct FolderScanViewModelTests {
         #expect(model.progress == nil)
     }
 
+    @Test func supersededScanIgnoresLateProgressWithoutReplacingActiveScanState() async throws {
+        let scanner = ControlledScanner()
+        let model = FolderScanViewModel(scanner: scanner)
+        let firstRoot = URL(fileURLWithPath: "/tmp/FolderLens-First-Progress")
+        let secondRoot = URL(fileURLWithPath: "/tmp/FolderLens-Second-Progress")
+
+        model.start(context: .init(folderURL: firstRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(1)
+        model.start(context: .init(folderURL: secondRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(2)
+        await scanner.publishProgress(.init(processedItemCount: 2), forRequestAt: 1)
+        await scanner.publishProgress(.init(processedItemCount: 99), forRequestAt: 0)
+        await Task.yield()
+
+        #expect(model.status == .scanning)
+        #expect(model.progress == .init(processedItemCount: 2))
+
+        await scanner.completeRequest(at: 1, with: result(named: "active.txt", root: secondRoot))
+        await scanner.completeRequest(at: 0, with: result(named: "stale.txt", root: firstRoot))
+        await waitUntilSettled(model)
+    }
+
     private func makeFile(_ url: URL, size: Int64) -> FileItem {
         FileItem(url: url, name: url.lastPathComponent, isDirectory: false, size: size, modifiedDate: Date())
     }
@@ -130,9 +193,13 @@ struct FolderScanViewModelTests {
         }
     }
 
-    private func result(named name: String, root: URL) -> FolderScanResult {
+    private func result(
+        named name: String,
+        root: URL,
+        warnings: [FolderScanWarning] = []
+    ) -> FolderScanResult {
         let file = makeFile(root.appendingPathComponent(name), size: 10)
-        return FolderScanResult(directChildren: [file], analysisItems: [file], warnings: [])
+        return FolderScanResult(directChildren: [file], analysisItems: [file], warnings: warnings)
     }
 }
 
@@ -176,7 +243,16 @@ private actor ControlledScanner: FolderScanning {
         requests[index].continuation = nil
     }
 
+    func failRequest(at index: Int) {
+        requests[index].continuation?.resume(throwing: ControlledScannerError.expected)
+        requests[index].continuation = nil
+    }
+
     func publishProgress(_ progress: FolderScanProgress, forRequestAt index: Int) async {
         await requests[index].onProgress(progress)
     }
+}
+
+private enum ControlledScannerError: Error {
+    case expected
 }
