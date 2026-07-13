@@ -809,7 +809,7 @@ Expected: `TEST SUCCEEDED` for unit, UI, and launch tests.
 Run the app from Xcode or:
 
 ```bash
-open /tmp/FolderLensDerivedData/Build/Products/Debug/FolderLens.app
+open /tmp/FolderLensDerivedData/Build/Products/Debug/RunBoard.app
 ```
 
 Verify:
