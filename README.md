@@ -1,46 +1,48 @@
 # FolderLens
 
-FolderLens is a lightweight macOS app for inspecting, previewing, and summarizing local folders.
+FolderLens is a lightweight macOS folder inspector that turns a local directory into a practical health report.
 
-It helps users quickly understand what is inside a folder by showing file type statistics, large files, recently modified files, cleanup suggestions, and exportable Markdown reports.
+It helps you answer the questions Finder does not surface quickly: what is taking space, what changed recently, which files may be cleanup candidates, and what should be reviewed first.
 
-## Features
+> Note: the product name is FolderLens. The current Xcode project and scheme are still named `RunBoard` from an earlier prototype.
 
-- Select and inspect any local folder
-- Browse files and subfolders
-- Preview images and text-like files
-- Search files by name
-- Filter by file type
-- Show total size and file type breakdown
-- Show largest files
-- Show recently modified files
-- Deep Scan mode for recursive folder analysis
-- Safe cleanup suggestions
-- Open files with the default app
-- Reveal files in Finder
-- Copy file paths
-- Export Markdown folder reports
+## Highlights
 
-## Why FolderLens?
+- Inspect any local folder with a native SwiftUI macOS interface.
+- Browse folders, preview images and text-like files, and open items in Finder.
+- Search by file name and filter by images, PDFs, videos, archives, code, text, and large files.
+- Toggle Deep Scan to analyze nested folders recursively.
+- See file type distribution, largest files, recently modified files, and safe cleanup candidates.
+- Get a Folder Health Score with a prioritized action plan.
+- Export a Markdown report that includes health score, cleanup suggestions, top files, and a full file list.
 
-Finder is great for opening folders, but it does not quickly summarize what is inside them.
+## Folder Health Score
 
-FolderLens helps answer questions like:
+FolderLens scores a folder from 0 to 100 based on signals that usually matter during cleanup:
 
-- Which files are taking up the most space?
-- What types of files are in this folder?
-- What was modified recently?
-- Are there obvious cleanup candidates?
-- Can I export a quick report of this folder?
+- large files over 100 MB
+- files not modified for more than one year
+- temporary, cache-like, or backup files
+- uncategorized file types
+- whether the scan is shallow or recursive
+
+The score is paired with a status such as Excellent, Good, Needs review, or Critical, plus an action plan that tells you what to inspect first. FolderLens never deletes files automatically.
 
 ## Screenshots
 
-Screenshots will be added soon.
+Screenshots will be added after the first polished release build.
+
+Suggested screenshots:
+
+- welcome screen
+- folder summary with Health Score
+- cleanup suggestions
+- exported Markdown report
 
 ## Requirements
 
-- macOS
-- Xcode
+- macOS 15.0 or later
+- Xcode 16.2 or later
 - SwiftUI
 
 ## Getting Started
@@ -48,5 +50,60 @@ Screenshots will be added soon.
 Clone the repository:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/FolderLens.git
-cd FolderLens
+git clone https://github.com/kannseiLiu/-FolderLens.git
+cd -FolderLens
+```
+
+Open the Xcode project:
+
+```bash
+open RunBoard/RunBoard.xcodeproj
+```
+
+In Xcode:
+
+1. Select the `RunBoard` scheme.
+2. Choose `My Mac` as the destination.
+3. Build and run.
+
+## Test
+
+Run the unit tests from Terminal:
+
+```bash
+xcodebuild test \
+  -project RunBoard/RunBoard.xcodeproj \
+  -scheme RunBoard \
+  -destination 'platform=macOS' \
+  -only-testing:RunBoardTests
+```
+
+## Project Structure
+
+```text
+RunBoard/
+  RunBoard.xcodeproj/       Xcode project
+  RunBoard/                 SwiftUI app source
+  RunBoardTests/            Unit tests
+  RunBoardUITests/          UI test scaffold
+```
+
+Core files:
+
+- `ContentView.swift`: folder selection, navigation, scanning, filtering, and Markdown export
+- `FolderSummary.swift`: summary data, health score, and action plan model
+- `FolderSummaryView.swift`: dashboard, statistics, cleanup suggestions, and health overview
+- `FilePreviewView.swift`: file actions and image/text previews
+- `FileItem.swift`: local file metadata model
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned improvements.
+
+## Safety
+
+FolderLens is designed as an inspection tool. It surfaces cleanup candidates and opens files in Finder, but it does not delete or modify user files automatically.
+
+## License
+
+No license has been selected yet.

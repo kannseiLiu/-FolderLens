@@ -9,6 +9,8 @@ struct FolderSummaryView: View {
             VStack(alignment: .leading, spacing: 26) {
                 headerSection
 
+                healthOverviewCard
+
                 quickStatsGrid
 
                 cleanupSuggestionsCard
@@ -79,6 +81,46 @@ struct FolderSummaryView: View {
     }
 
     // MARK: - Quick Stats
+
+    private var healthOverviewCard: some View {
+        CardView {
+            HStack(alignment: .top, spacing: 24) {
+                HealthScoreView(
+                    score: summary.healthScore,
+                    level: summary.healthLevel,
+                    tint: healthTint
+                )
+                .frame(width: 190)
+
+                VStack(alignment: .leading, spacing: 16) {
+                    SectionHeader(
+                        title: "Action Plan",
+                        subtitle: "Prioritized next steps based on disk impact and review risk",
+                        icon: "checklist"
+                    )
+
+                    VStack(spacing: 10) {
+                        ForEach(summary.actionPlan) { action in
+                            ActionPlanRow(action: action, tint: healthTint)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var healthTint: Color {
+        switch summary.healthLevel {
+        case .excellent:
+            return .green
+        case .good:
+            return .blue
+        case .needsReview:
+            return .orange
+        case .critical:
+            return .red
+        }
+    }
 
     private var quickStatsGrid: some View {
         LazyVGrid(
@@ -336,6 +378,73 @@ struct FolderSummaryView: View {
         )
     }
 }
+
+struct HealthScoreView: View {
+    let score: Int
+    let level: FolderHealthLevel
+    let tint: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: level.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(tint)
+
+                Text("Health Score")
+                    .font(.headline)
+            }
+
+            Text("\(score)")
+                .font(.system(size: 56, weight: .bold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+
+            ProgressView(value: Double(score), total: 100)
+                .tint(tint)
+
+            Text(level.title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+struct ActionPlanRow: View {
+    let action: FolderActionItem
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(tint.opacity(0.12))
+                    .frame(width: 34, height: 34)
+
+                Image(systemName: action.systemImage)
+                    .font(.headline)
+                    .foregroundStyle(tint)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(action.title)
+                    .font(.headline)
+
+                Text(action.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
 struct CleanupGroup: View {
     let title: String
     let icon: String

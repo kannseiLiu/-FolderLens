@@ -571,6 +571,12 @@ struct ContentView: View {
             "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
         }
         .joined(separator: "\n")
+
+        let actionPlanRows = summary.actionPlan.map { action in
+            "| \(escapeMarkdownTable(action.title)) | \(escapeMarkdownTable(action.detail)) |"
+        }
+        .joined(separator: "\n")
+
         let allFileRows = sortedFiles.map { file in
             let sizeText = file.isDirectory ? "-" : file.formattedSize
             return "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.typeDescription)) | \(escapeMarkdownTable(sizeText)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
@@ -585,6 +591,20 @@ struct ContentView: View {
         Path: `\(summary.folderURL.path)`
 
         Scan mode: \(summary.isDeepScan ? "Deep Scan" : "Current folder only")
+
+        ## Folder Health
+
+        | Metric | Value |
+        |---|---:|
+        | Health score | \(summary.healthScore) / 100 |
+        | Status | \(summary.healthSummary) |
+        | Cleanup candidates | \(summary.cleanupCandidateCount) |
+
+        ## Action Plan
+
+        | Step | Why it matters |
+        |---|---|
+        \(actionPlanRows)
 
         ## Overview
 
