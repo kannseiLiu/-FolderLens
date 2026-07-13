@@ -20,17 +20,19 @@ struct ContentView: View {
     @AppStorage("largeFileThresholdMB") private var largeFileThresholdMB: Int = ScanSettings.default.largeFileThresholdMB
     @AppStorage("oldFileAgeYears") private var oldFileAgeYears: Int = ScanSettings.default.oldFileAgeYears
     @AppStorage("includeHiddenFiles") private var includeHiddenFiles: Bool = ScanSettings.default.includeHiddenFiles
+    @StateObject private var scanModel = FolderScanViewModel()
 
     @State private var rootFolderURL: URL?
     @State private var currentFolderURL: URL?
     @State private var folderHistory: [URL] = []
 
-    @State private var files: [FileItem] = []
     @State private var selectedFile: FileItem?
-    @State private var currentFolderSummary: FolderSummary?
     @State private var searchText: String = ""
     @State private var isDeepScanEnabled: Bool = false
     @State private var selectedFilter: FileFilter = .all
+
+    private var files: [FileItem] { scanModel.files }
+    private var currentFolderSummary: FolderSummary? { scanModel.summary }
 
     private var scanSettings: ScanSettings {
         ScanSettings(
@@ -116,6 +118,14 @@ struct ContentView: View {
             searchAndFilterSection
             scanSettingsSection
             toolbarRow
+
+            ScanStatusView(
+                status: scanModel.status,
+                progress: scanModel.progress,
+                warningCount: scanModel.warnings.count,
+                onCancel: scanModel.cancel
+            )
+            .padding(.horizontal)
 
             Divider()
 
@@ -248,7 +258,11 @@ struct ContentView: View {
                 } label: {
                     Label("Report", systemImage: "square.and.arrow.down")
                 }
-                .disabled(currentFolderURL == nil || currentFolderSummary == nil)
+                .disabled(
+                    currentFolderURL == nil
+                        || currentFolderSummary == nil
+                        || scanModel.status == .scanning
+                )
 
                 Spacer()
 
@@ -369,88 +383,13 @@ struct ContentView: View {
     }
 
     private func loadFiles(from folderURL: URL) {
-        do {
-            let directoryOptions: FileManager.DirectoryEnumerationOptions = includeHiddenFiles ? [] : [.skipsHiddenFiles]
-            let urls = try FileManager.default.contentsOfDirectory(
-                at: folderURL,
-                includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-                options: directoryOptions
-            )
-
-            let loadedFiles = urls.map { url in
-                makeFileItem(from: url)
-            }
-
-            files = loadedFiles.sorted { first, second in
-                if first.isDirectory != second.isDirectory {
-                    return first.isDirectory && !second.isDirectory
-                }
-
-                return first.name.lowercased() < second.name.lowercased()
-            }
-
-            let summaryFiles: [FileItem]
-
-            if isDeepScanEnabled {
-                summaryFiles = scanFilesRecursively(from: folderURL)
-            } else {
-                summaryFiles = loadedFiles
-            }
-
-            currentFolderSummary = FolderAnalyzer.makeSummary(
-                for: folderURL,
-                files: summaryFiles,
+        scanModel.start(
+            context: FolderScanContext(
+                folderURL: folderURL,
                 isDeepScan: isDeepScanEnabled,
                 settings: scanSettings
             )
-
-        } catch {
-            print("Failed to load files: \(error)")
-            files = []
-            currentFolderSummary = nil
-        }
-    }
-
-    private func makeFileItem(from url: URL) -> FileItem {
-        let resourceValues = try? url.resourceValues(
-            forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey]
         )
-
-        let isDirectory = resourceValues?.isDirectory ?? false
-        let fileSize = Int64(resourceValues?.fileSize ?? 0)
-        let modifiedDate = resourceValues?.contentModificationDate
-
-        return FileItem(
-            url: url,
-            name: url.lastPathComponent,
-            isDirectory: isDirectory,
-            size: fileSize,
-            modifiedDate: modifiedDate
-        )
-    }
-
-    private func scanFilesRecursively(from folderURL: URL) -> [FileItem] {
-        var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
-        if !includeHiddenFiles {
-            options.insert(.skipsHiddenFiles)
-        }
-
-        guard let enumerator = FileManager.default.enumerator(
-            at: folderURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-            options: options
-        ) else {
-            return []
-        }
-
-        var result: [FileItem] = []
-
-        for case let url as URL in enumerator {
-            let item = makeFileItem(from: url)
-            result.append(item)
-        }
-
-        return result
     }
 
     private func exportMarkdownSummary() {
