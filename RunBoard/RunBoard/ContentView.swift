@@ -338,7 +338,11 @@ struct ContentView: View {
                 summaryFiles = loadedFiles
             }
 
-            currentFolderSummary = makeSummary(for: folderURL, files: summaryFiles)
+            currentFolderSummary = FolderAnalyzer.makeSummary(
+                for: folderURL,
+                files: summaryFiles,
+                isDeepScan: isDeepScanEnabled
+            )
 
         } catch {
             print("Failed to load files: \(error)")
@@ -384,139 +388,6 @@ struct ContentView: View {
         return result
     }
 
-    private func makeSummary(for folderURL: URL, files: [FileItem]) -> FolderSummary {
-        let folderCount = files.filter { $0.isDirectory }.count
-        let imageCount = files.filter { $0.isImage }.count
-        let csvCount = files.filter { $0.fileExtension == "csv" }.count
-        let jsonCount = files.filter { $0.fileExtension == "json" }.count
-        let textCount = files.filter { ["txt", "md"].contains($0.fileExtension) }.count
-        let logCount = files.filter { $0.fileExtension == "log" }.count
-        let pdfCount = files.filter { $0.fileExtension == "pdf" }.count
-
-        let archiveCount = files.filter {
-            ["zip", "tar", "gz", "rar", "7z"].contains($0.fileExtension)
-        }.count
-
-        let videoCount = files.filter {
-            ["mp4", "mov", "avi", "mkv"].contains($0.fileExtension)
-        }.count
-
-        let codeCount = files.filter {
-            ["swift", "py", "js", "ts", "html", "css", "java", "cpp", "c", "h", "rs", "go", "sh"].contains($0.fileExtension)
-        }.count
-
-        let knownCount = folderCount
-            + imageCount
-            + csvCount
-            + jsonCount
-            + textCount
-            + logCount
-            + pdfCount
-            + archiveCount
-            + videoCount
-            + codeCount
-
-        let otherCount = max(files.count - knownCount, 0)
-
-        let totalSize = files
-            .filter { !$0.isDirectory }
-            .map { $0.size }
-            .reduce(0, +)
-
-        let largestFiles = files
-            .filter { !$0.isDirectory }
-            .sorted { $0.size > $1.size }
-            .prefix(10)
-            .map { $0 }
-
-        let recentFiles = files
-            .filter { !$0.isDirectory && $0.modifiedDate != nil }
-            .sorted {
-                ($0.modifiedDate ?? .distantPast) > ($1.modifiedDate ?? .distantPast)
-            }
-            .prefix(10)
-            .map { $0 }
-        let largeFiles = files
-            .filter { !$0.isDirectory && $0.size >= 100 * 1024 * 1024 }
-            .sorted { $0.size > $1.size }
-            .prefix(10)
-            .map { $0 }
-
-        let oneYearAgo = Calendar.current.date(
-            byAdding: .year,
-            value: -1,
-            to: Date()
-        ) ?? .distantPast
-
-        let oldFiles = files
-            .filter { file in
-                guard !file.isDirectory, let modifiedDate = file.modifiedDate else {
-                    return false
-                }
-
-                return modifiedDate < oneYearAgo
-            }
-            .sorted {
-                ($0.modifiedDate ?? .distantPast) < ($1.modifiedDate ?? .distantPast)
-            }
-            .prefix(10)
-            .map { $0 }
-
-        let temporaryFiles = files
-            .filter { !$0.isDirectory && isTemporaryCandidate($0) }
-            .prefix(10)
-            .map { $0 }
-        return FolderSummary(
-            folderURL: folderURL,
-            totalCount: files.count,
-            folderCount: folderCount,
-            imageCount: imageCount,
-            csvCount: csvCount,
-            jsonCount: jsonCount,
-            textCount: textCount,
-            logCount: logCount,
-            pdfCount: pdfCount,
-            archiveCount: archiveCount,
-            videoCount: videoCount,
-            codeCount: codeCount,
-            otherCount: otherCount,
-            totalSize: totalSize,
-            largestFiles: largestFiles,
-            recentFiles: recentFiles,
-            largeFiles: largeFiles,
-            oldFiles: oldFiles,
-            temporaryFiles: temporaryFiles,
-            isDeepScan: isDeepScanEnabled
-        )
-    }
-    private func isTemporaryCandidate(_ file: FileItem) -> Bool {
-        let name = file.name.lowercased()
-        let ext = file.fileExtension
-
-        let temporaryExtensions = [
-            "tmp", "temp", "cache", "bak", "old", "swp", "part", "download"
-        ]
-
-        let temporaryNames = [
-            ".ds_store",
-            "thumbs.db",
-            "desktop.ini"
-        ]
-
-        if temporaryExtensions.contains(ext) {
-            return true
-        }
-
-        if temporaryNames.contains(name) {
-            return true
-        }
-
-        if name.contains("cache") || name.contains("backup") || name.contains("temp") {
-            return true
-        }
-
-        return false
-    }
     private func exportMarkdownSummary() {
         guard let summary = currentFolderSummary else {
             return
@@ -577,6 +448,21 @@ struct ContentView: View {
         }
         .joined(separator: "\n")
 
+        let folderHotspotRows = summary.largestFolders.map { folder in
+            "| \(escapeMarkdownTable(folder.name)) | \(escapeMarkdownTable(folder.formattedSize)) | \(folder.fileCount) | `\(escapeMarkdownTable(folder.url.path))` |"
+        }
+        .joined(separator: "\n")
+
+        let duplicateRows = summary.duplicateGroups.map { group in
+            let paths = group.files
+                .prefix(3)
+                .map { "`\(escapeMarkdownTable($0.url.path))`" }
+                .joined(separator: "<br>")
+
+            return "| \(escapeMarkdownTable(group.displayName)) | \(group.files.count) | \(escapeMarkdownTable(group.formattedFileSize)) | \(escapeMarkdownTable(group.formattedRecoverableSize)) | \(paths) |"
+        }
+        .joined(separator: "\n")
+
         let allFileRows = sortedFiles.map { file in
             let sizeText = file.isDirectory ? "-" : file.formattedSize
             return "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.typeDescription)) | \(escapeMarkdownTable(sizeText)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
@@ -599,6 +485,8 @@ struct ContentView: View {
         | Health score | \(summary.healthScore) / 100 |
         | Status | \(summary.healthSummary) |
         | Cleanup candidates | \(summary.cleanupCandidateCount) |
+        | Review size | \(summary.formattedReviewableSize) |
+        | Recoverable estimate | \(summary.formattedRecoverableSize) |
 
         ## Action Plan
 
@@ -624,6 +512,18 @@ struct ContentView: View {
         | Archives | \(summary.archiveCount) |
         | Other files | \(summary.otherCount) |
         
+        ## Folder Size Hotspots
+
+        | Folder | Size | Files | Path |
+        |---|---:|---:|---|
+        \(folderHotspotRows.isEmpty ? "| No folder hotspots found | - | - | - |" : folderHotspotRows)
+
+        ## Potential Duplicates
+
+        | Name | Copies | Size each | Recoverable | Sample paths |
+        |---|---:|---:|---:|---|
+        \(duplicateRows.isEmpty ? "| No potential duplicates found | - | - | - | - |" : duplicateRows)
+
         ## Cleanup Suggestions
 
         FolderLens only provides safe suggestions and never deletes files automatically.

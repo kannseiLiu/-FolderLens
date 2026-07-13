@@ -43,6 +43,50 @@ struct FolderActionItem: Identifiable, Equatable {
     }
 }
 
+struct FolderHotspot: Identifiable, Equatable {
+    let url: URL
+    let name: String
+    let totalSize: Int64
+    let fileCount: Int
+
+    var id: String {
+        url.path
+    }
+
+    var formattedSize: String {
+        ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file)
+    }
+}
+
+struct DuplicateFileGroup: Identifiable, Equatable {
+    let displayName: String
+    let files: [FileItem]
+
+    var id: String {
+        "\(displayName.lowercased())-\(files.first?.size ?? 0)"
+    }
+
+    var fileSize: Int64 {
+        files.first?.size ?? 0
+    }
+
+    var totalSize: Int64 {
+        files.map(\.size).reduce(0, +)
+    }
+
+    var recoverableSize: Int64 {
+        max(totalSize - fileSize, 0)
+    }
+
+    var formattedFileSize: String {
+        ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
+    }
+
+    var formattedRecoverableSize: String {
+        ByteCountFormatter.string(fromByteCount: recoverableSize, countStyle: .file)
+    }
+}
+
 struct FolderSummary {
     let folderURL: URL
     let totalCount: Int
@@ -64,6 +108,56 @@ struct FolderSummary {
     let oldFiles: [FileItem]
     let temporaryFiles: [FileItem]
     let isDeepScan: Bool
+    let largestFolders: [FolderHotspot]
+    let duplicateGroups: [DuplicateFileGroup]
+
+    init(
+        folderURL: URL,
+        totalCount: Int,
+        folderCount: Int,
+        imageCount: Int,
+        csvCount: Int,
+        jsonCount: Int,
+        textCount: Int,
+        logCount: Int,
+        pdfCount: Int,
+        archiveCount: Int,
+        videoCount: Int,
+        codeCount: Int,
+        otherCount: Int,
+        totalSize: Int64,
+        largestFiles: [FileItem],
+        recentFiles: [FileItem],
+        largeFiles: [FileItem],
+        oldFiles: [FileItem],
+        temporaryFiles: [FileItem],
+        isDeepScan: Bool,
+        largestFolders: [FolderHotspot] = [],
+        duplicateGroups: [DuplicateFileGroup] = []
+    ) {
+        self.folderURL = folderURL
+        self.totalCount = totalCount
+        self.folderCount = folderCount
+        self.imageCount = imageCount
+        self.csvCount = csvCount
+        self.jsonCount = jsonCount
+        self.textCount = textCount
+        self.logCount = logCount
+        self.pdfCount = pdfCount
+        self.archiveCount = archiveCount
+        self.videoCount = videoCount
+        self.codeCount = codeCount
+        self.otherCount = otherCount
+        self.totalSize = totalSize
+        self.largestFiles = largestFiles
+        self.recentFiles = recentFiles
+        self.largeFiles = largeFiles
+        self.oldFiles = oldFiles
+        self.temporaryFiles = temporaryFiles
+        self.isDeepScan = isDeepScan
+        self.largestFolders = largestFolders
+        self.duplicateGroups = duplicateGroups
+    }
 
     var folderName: String {
         folderURL.lastPathComponent
@@ -77,14 +171,42 @@ struct FolderSummary {
         largeFiles.count + oldFiles.count + temporaryFiles.count
     }
 
+    var reviewableSize: Int64 {
+        var seenPaths: Set<String> = []
+        var total: Int64 = 0
+
+        for file in largeFiles + oldFiles + temporaryFiles {
+            if seenPaths.insert(file.url.path).inserted {
+                total += file.size
+            }
+        }
+
+        return total + duplicateGroups.map(\.recoverableSize).reduce(0, +)
+    }
+
+    var recoverableSize: Int64 {
+        let temporarySize = temporaryFiles.map(\.size).reduce(0, +)
+        let duplicateSize = duplicateGroups.map(\.recoverableSize).reduce(0, +)
+        return temporarySize + duplicateSize
+    }
+
+    var formattedReviewableSize: String {
+        ByteCountFormatter.string(fromByteCount: reviewableSize, countStyle: .file)
+    }
+
+    var formattedRecoverableSize: String {
+        ByteCountFormatter.string(fromByteCount: recoverableSize, countStyle: .file)
+    }
+
     var healthScore: Int {
         let largeFilePenalty = min(largeFiles.count * 12, 28)
         let oldFilePenalty = min(oldFiles.count * 10, 24)
         let temporaryFilePenalty = min(temporaryFiles.count * 8, 20)
+        let duplicatePenalty = min(duplicateGroups.count * 8, 16)
         let unknownTypePenalty = min(Int((Double(otherCount) / Double(max(totalCount, 1)) * 16).rounded()), 16)
         let shallowScanPenalty = isDeepScan ? 0 : 4
 
-        return max(0, 100 - largeFilePenalty - oldFilePenalty - temporaryFilePenalty - unknownTypePenalty - shallowScanPenalty)
+        return max(0, 100 - largeFilePenalty - oldFilePenalty - temporaryFilePenalty - duplicatePenalty - unknownTypePenalty - shallowScanPenalty)
     }
 
     var healthLevel: FolderHealthLevel {
@@ -133,6 +255,16 @@ struct FolderSummary {
                     title: "Check \(temporaryFiles.count) \(temporaryFiles.count == 1 ? "temporary file" : "temporary files")",
                     detail: "Cache, backup, and temporary files are often safe to clean after review.",
                     systemImage: "trash"
+                )
+            )
+        }
+
+        if !duplicateGroups.isEmpty {
+            actions.append(
+                FolderActionItem(
+                    title: "Inspect \(duplicateGroups.count) potential duplicate \(duplicateGroups.count == 1 ? "group" : "groups")",
+                    detail: "Files with the same name and size may be redundant copies.",
+                    systemImage: "doc.on.doc"
                 )
             )
         }

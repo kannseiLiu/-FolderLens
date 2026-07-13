@@ -14,6 +14,9 @@ It helps you answer the questions Finder does not surface quickly: what is takin
 - Toggle Deep Scan to analyze nested folders recursively.
 - See file type distribution, largest files, recently modified files, and safe cleanup candidates.
 - Get a Folder Health Score with a prioritized action plan.
+- Find folder size hotspots during Deep Scan.
+- Detect potential duplicate files by matching file name and size.
+- Estimate reviewable space and conservative recoverable space.
 - Export a Markdown report that includes health score, cleanup suggestions, top files, and a full file list.
 
 ## Folder Health Score
@@ -27,6 +30,15 @@ FolderLens scores a folder from 0 to 100 based on signals that usually matter du
 - whether the scan is shallow or recursive
 
 The score is paired with a status such as Excellent, Good, Needs review, or Critical, plus an action plan that tells you what to inspect first. FolderLens never deletes files automatically.
+
+## Deep Scan Insights
+
+Deep Scan turns FolderLens into a more useful cleanup assistant:
+
+- Folder Size Hotspots rank nested folders by total file size.
+- Potential Duplicates group files with the same name and size for manual review.
+- Review Size estimates how much data deserves attention across large, old, temporary, and duplicate candidates.
+- Recoverable estimates a conservative cleanup amount from temporary files and extra duplicate copies.
 
 ## Screenshots
 

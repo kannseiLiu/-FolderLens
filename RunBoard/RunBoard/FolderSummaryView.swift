@@ -15,6 +15,10 @@ struct FolderSummaryView: View {
 
                 cleanupSuggestionsCard
 
+                folderHotspotsCard
+
+                duplicateFilesCard
+
                 fileTypeBreakdownCard
 
                 largestFilesCard
@@ -184,6 +188,20 @@ struct FolderSummaryView: View {
                 icon: "archivebox",
                 tint: .brown
             )
+
+            StatCard(
+                title: "Review Size",
+                value: summary.formattedReviewableSize,
+                icon: "magnifyingglass.circle",
+                tint: .orange
+            )
+
+            StatCard(
+                title: "Recoverable",
+                value: summary.formattedRecoverableSize,
+                icon: "arrow.down.circle",
+                tint: .green
+            )
         }
     }
 
@@ -331,6 +349,57 @@ struct FolderSummaryView: View {
                         icon: "doc",
                         tint: .secondary
                     )
+                }
+            }
+        }
+    }
+
+    private var folderHotspotsCard: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(
+                    title: "Folder Size Hotspots",
+                    subtitle: summary.isDeepScan
+                        ? "Subfolders ranked by total nested file size"
+                        : "Turn on Deep Scan to rank nested folder sizes",
+                    icon: "folder.badge.gearshape"
+                )
+
+                if summary.largestFolders.isEmpty {
+                    EmptyRankingView(text: summary.isDeepScan ? "No nested folder hotspots found." : "Deep Scan is required for folder hotspots.")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(summary.largestFolders.enumerated()), id: \.element.id) { index, folder in
+                            FolderHotspotRow(index: index + 1, folder: folder)
+
+                            if index != summary.largestFolders.count - 1 {
+                                Divider()
+                                    .padding(.leading, 42)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var duplicateFilesCard: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(
+                    title: "Potential Duplicates",
+                    subtitle: "Files with matching names and sizes. Review before deleting anything.",
+                    icon: "doc.on.doc"
+                )
+
+                if summary.duplicateGroups.isEmpty {
+                    EmptyRankingView(text: "No potential duplicate groups found.")
+                } else {
+                    VStack(spacing: 14) {
+                        ForEach(summary.duplicateGroups) { group in
+                            DuplicateGroupRow(group: group)
+                        }
+                    }
                 }
             }
         }
@@ -691,6 +760,86 @@ struct FileRankingCard: View {
                 }
             }
         }
+    }
+}
+
+struct FolderHotspotRow: View {
+    let index: Int
+    let folder: FolderHotspot
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+
+            Image(systemName: "folder.fill")
+                .frame(width: 24)
+                .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(folder.name)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Text("\(folder.fileCount) files")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Text(folder.formattedSize)
+                .font(.headline)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+struct DuplicateGroupRow: View {
+    let group: DuplicateFileGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: "doc.on.doc")
+                    .frame(width: 24)
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(group.displayName)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    Text("\(group.files.count) copies · \(group.formattedFileSize) each")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(group.formattedRecoverableSize)
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                    .lineLimit(1)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(group.files.prefix(3)) { file in
+                    Text(file.url.path)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding(.leading, 36)
+        }
+        .padding(14)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
