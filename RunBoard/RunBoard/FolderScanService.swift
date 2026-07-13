@@ -5,9 +5,15 @@ struct FolderScanService: FolderScanning {
         context: FolderScanContext,
         onProgress: @escaping FolderScanProgressHandler
     ) async throws -> FolderScanResult {
-        try await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
             try await scanSynchronously(context: context, onProgress: onProgress)
-        }.value
+        }
+
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
     }
 
     private func scanSynchronously(
