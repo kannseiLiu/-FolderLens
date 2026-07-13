@@ -1,7 +1,12 @@
 import Foundation
 
 struct FolderAnalyzer {
-    static func makeSummary(for folderURL: URL, files: [FileItem], isDeepScan: Bool) -> FolderSummary {
+    static func makeSummary(
+        for folderURL: URL,
+        files: [FileItem],
+        isDeepScan: Bool,
+        settings: ScanSettings = .default
+    ) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
         let imageCount = files.filter { $0.isImage }.count
         let csvCount = files.filter { $0.fileExtension == "csv" }.count
@@ -55,16 +60,10 @@ struct FolderAnalyzer {
             .map { $0 }
 
         let largeFiles = files
-            .filter { !$0.isDirectory && $0.size >= 100 * 1024 * 1024 }
+            .filter { !$0.isDirectory && $0.size >= settings.largeFileThresholdBytes }
             .sorted { $0.size > $1.size }
             .prefix(10)
             .map { $0 }
-
-        let oneYearAgo = Calendar.current.date(
-            byAdding: .year,
-            value: -1,
-            to: Date()
-        ) ?? .distantPast
 
         let oldFiles = files
             .filter { file in
@@ -72,7 +71,7 @@ struct FolderAnalyzer {
                     return false
                 }
 
-                return modifiedDate < oneYearAgo
+                return modifiedDate < settings.oldFileCutoffDate
             }
             .sorted {
                 ($0.modifiedDate ?? .distantPast) < ($1.modifiedDate ?? .distantPast)
@@ -107,7 +106,8 @@ struct FolderAnalyzer {
             temporaryFiles: temporaryFiles,
             isDeepScan: isDeepScan,
             largestFolders: makeLargestFolders(root: folderURL, files: files),
-            duplicateGroups: makeDuplicateGroups(files: files)
+            duplicateGroups: makeDuplicateGroups(files: files),
+            settings: settings
         )
     }
 

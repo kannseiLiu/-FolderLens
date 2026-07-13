@@ -137,6 +137,38 @@ struct RunBoardTests {
         #expect(summary.duplicateGroups[0].recoverableSize == 5 * 1024 * 1024)
     }
 
+    @Test func analyzerUsesCustomCleanupThresholds() async throws {
+        let root = URL(fileURLWithPath: "/tmp/Workspace")
+        let twoYearOldDate = Calendar.current.date(byAdding: .year, value: -2, to: Date())
+        let files = [
+            file("/tmp/Workspace/export.mov", size: 60 * 1024 * 1024),
+            FileItem(
+                url: URL(fileURLWithPath: "/tmp/Workspace/notes.md"),
+                name: "notes.md",
+                isDirectory: false,
+                size: 64_000,
+                modifiedDate: twoYearOldDate
+            )
+        ]
+
+        let settings = ScanSettings(
+            largeFileThresholdMB: 50,
+            oldFileAgeYears: 1,
+            includeHiddenFiles: true
+        )
+
+        let summary = FolderAnalyzer.makeSummary(
+            for: root,
+            files: files,
+            isDeepScan: true,
+            settings: settings
+        )
+
+        #expect(summary.largeFiles.map(\.name) == ["export.mov"])
+        #expect(summary.oldFiles.map(\.name) == ["notes.md"])
+        #expect(summary.settings == settings)
+    }
+
     @Test func summaryEstimatesReviewableAndRecoverableSpace() async throws {
         let duplicateA = file("/tmp/Workspace/A/data.csv", size: 10 * 1024 * 1024)
         let duplicateB = file("/tmp/Workspace/B/data.csv", size: 10 * 1024 * 1024)

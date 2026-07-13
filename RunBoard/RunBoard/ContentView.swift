@@ -9,7 +9,7 @@ enum FileFilter: String, CaseIterable, Identifiable {
     case archives = "Archives"
     case code = "Code"
     case text = "Text"
-    case large = "Large > 100 MB"
+    case large = "Large files"
 
     var id: String {
         rawValue
@@ -17,6 +17,10 @@ enum FileFilter: String, CaseIterable, Identifiable {
 }
 
 struct ContentView: View {
+    @AppStorage("largeFileThresholdMB") private var largeFileThresholdMB: Int = ScanSettings.default.largeFileThresholdMB
+    @AppStorage("oldFileAgeYears") private var oldFileAgeYears: Int = ScanSettings.default.oldFileAgeYears
+    @AppStorage("includeHiddenFiles") private var includeHiddenFiles: Bool = ScanSettings.default.includeHiddenFiles
+
     @State private var rootFolderURL: URL?
     @State private var currentFolderURL: URL?
     @State private var folderHistory: [URL] = []
@@ -27,6 +31,14 @@ struct ContentView: View {
     @State private var searchText: String = ""
     @State private var isDeepScanEnabled: Bool = false
     @State private var selectedFilter: FileFilter = .all
+
+    private var scanSettings: ScanSettings {
+        ScanSettings(
+            largeFileThresholdMB: largeFileThresholdMB,
+            oldFileAgeYears: oldFileAgeYears,
+            includeHiddenFiles: includeHiddenFiles
+        )
+    }
 
     private var filteredFiles: [FileItem] {
         let searchedFiles: [FileItem]
@@ -71,7 +83,7 @@ struct ContentView: View {
 
         case .large:
             return searchedFiles.filter {
-                !$0.isDirectory && $0.size >= 100 * 1024 * 1024
+                !$0.isDirectory && $0.size >= scanSettings.largeFileThresholdBytes
             }
         }
     }
@@ -102,6 +114,7 @@ struct ContentView: View {
             selectFolderButton
             currentFolderCard
             searchAndFilterSection
+            scanSettingsSection
             toolbarRow
 
             Divider()
@@ -181,6 +194,45 @@ struct ContentView: View {
         .padding(.horizontal)
     }
 
+    private var scanSettingsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Scan Settings", systemImage: "slider.horizontal.3")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text(includeHiddenFiles ? "Hidden included" : "Hidden skipped")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+
+            Stepper("Large: \(largeFileThresholdMB) MB", value: $largeFileThresholdMB, in: 10...2048, step: 10)
+                .onChange(of: largeFileThresholdMB) { _ in
+                    reloadCurrentFolder()
+                }
+
+            Stepper("Old: \(oldFileAgeYears) \(oldFileAgeYears == 1 ? "year" : "years")", value: $oldFileAgeYears, in: 1...10)
+                .onChange(of: oldFileAgeYears) { _ in
+                    reloadCurrentFolder()
+                }
+
+            Toggle(isOn: $includeHiddenFiles) {
+                Label("Include Hidden Files", systemImage: includeHiddenFiles ? "eye" : "eye.slash")
+            }
+            .toggleStyle(.switch)
+            .onChange(of: includeHiddenFiles) { _ in
+                reloadCurrentFolder()
+            }
+        }
+        .font(.caption)
+        .padding(12)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal)
+    }
+
     private var toolbarRow: some View {
         VStack(spacing: 10) {
             HStack {
@@ -210,10 +262,7 @@ struct ContentView: View {
             }
             .toggleStyle(.switch)
             .onChange(of: isDeepScanEnabled) { _ in
-                if let currentFolderURL {
-                    selectedFile = nil
-                    loadFiles(from: currentFolderURL)
-                }
+                reloadCurrentFolder()
             }
         }
         .padding(.horizontal)
@@ -310,12 +359,22 @@ struct ContentView: View {
         loadFiles(from: previousFolder)
     }
 
+    private func reloadCurrentFolder() {
+        guard let currentFolderURL else {
+            return
+        }
+
+        selectedFile = nil
+        loadFiles(from: currentFolderURL)
+    }
+
     private func loadFiles(from folderURL: URL) {
         do {
+            let directoryOptions: FileManager.DirectoryEnumerationOptions = includeHiddenFiles ? [] : [.skipsHiddenFiles]
             let urls = try FileManager.default.contentsOfDirectory(
                 at: folderURL,
                 includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-                options: [.skipsHiddenFiles]
+                options: directoryOptions
             )
 
             let loadedFiles = urls.map { url in
@@ -341,7 +400,8 @@ struct ContentView: View {
             currentFolderSummary = FolderAnalyzer.makeSummary(
                 for: folderURL,
                 files: summaryFiles,
-                isDeepScan: isDeepScanEnabled
+                isDeepScan: isDeepScanEnabled,
+                settings: scanSettings
             )
 
         } catch {
@@ -370,10 +430,15 @@ struct ContentView: View {
     }
 
     private func scanFilesRecursively(from folderURL: URL) -> [FileItem] {
+        var options: FileManager.DirectoryEnumerationOptions = [.skipsPackageDescendants]
+        if !includeHiddenFiles {
+            options.insert(.skipsHiddenFiles)
+        }
+
         guard let enumerator = FileManager.default.enumerator(
             at: folderURL,
             includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: options
         ) else {
             return []
         }
@@ -488,6 +553,14 @@ struct ContentView: View {
         | Review size | \(summary.formattedReviewableSize) |
         | Recoverable estimate | \(summary.formattedRecoverableSize) |
 
+        ## Scan Settings
+
+        | Setting | Value |
+        |---|---:|
+        | Large file threshold | \(summary.settings.largeFileThresholdMB) MB |
+        | Old file threshold | \(summary.settings.oldFileAgeYears) \(summary.settings.oldFileAgeYears == 1 ? "year" : "years") |
+        | Hidden files | \(summary.settings.includeHiddenFiles ? "Included" : "Skipped") |
+
         ## Action Plan
 
         | Step | Why it matters |
@@ -528,13 +601,13 @@ struct ContentView: View {
 
         FolderLens only provides safe suggestions and never deletes files automatically.
 
-        ### Large files over 100 MB
+        ### Large files over \(summary.settings.largeFileThresholdMB) MB
 
         | Name | Size | Modified |
         |---|---:|---|
         \(largeCleanupRows.isEmpty ? "| No candidates | - | - |" : largeCleanupRows)
 
-        ### Old files not modified for 1 year
+        ### Old files not modified for \(summary.settings.oldFileAgeYears) \(summary.settings.oldFileAgeYears == 1 ? "year" : "years")
 
         | Name | Modified | Size |
         |---|---|---:|

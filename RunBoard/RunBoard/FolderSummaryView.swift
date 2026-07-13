@@ -75,6 +75,12 @@ struct FolderSummaryView: View {
                             systemImage: "internaldrive",
                             isHighlighted: false
                         )
+
+                        StatusBadge(
+                            text: summary.settings.includeHiddenFiles ? "Hidden included" : "Hidden skipped",
+                            systemImage: summary.settings.includeHiddenFiles ? "eye" : "eye.slash",
+                            isHighlighted: summary.settings.includeHiddenFiles
+                        )
                     }
                     .padding(.top, 4)
                 }
@@ -230,7 +236,7 @@ struct FolderSummaryView: View {
                 } else {
                     VStack(spacing: 16) {
                         CleanupGroup(
-                            title: "Large files over 100 MB",
+                            title: "Large files over \(summary.settings.largeFileThresholdMB) MB",
                             icon: "externaldrive.badge.exclamationmark",
                             files: summary.largeFiles,
                             trailingText: { $0.formattedSize },
@@ -239,7 +245,7 @@ struct FolderSummaryView: View {
                         )
 
                         CleanupGroup(
-                            title: "Old files not modified for 1 year",
+                            title: "Old files not modified for \(summary.settings.oldFileAgeYears) \(summary.settings.oldFileAgeYears == 1 ? "year" : "years")",
                             icon: "clock.badge.exclamationmark",
                             files: summary.oldFiles,
                             trailingText: { $0.formattedModifiedDate },

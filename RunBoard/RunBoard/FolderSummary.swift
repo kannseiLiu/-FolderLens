@@ -110,6 +110,7 @@ struct FolderSummary {
     let isDeepScan: Bool
     let largestFolders: [FolderHotspot]
     let duplicateGroups: [DuplicateFileGroup]
+    let settings: ScanSettings
 
     init(
         folderURL: URL,
@@ -133,7 +134,8 @@ struct FolderSummary {
         temporaryFiles: [FileItem],
         isDeepScan: Bool,
         largestFolders: [FolderHotspot] = [],
-        duplicateGroups: [DuplicateFileGroup] = []
+        duplicateGroups: [DuplicateFileGroup] = [],
+        settings: ScanSettings = .default
     ) {
         self.folderURL = folderURL
         self.totalCount = totalCount
@@ -157,6 +159,7 @@ struct FolderSummary {
         self.isDeepScan = isDeepScan
         self.largestFolders = largestFolders
         self.duplicateGroups = duplicateGroups
+        self.settings = settings
     }
 
     var folderName: String {
@@ -233,7 +236,7 @@ struct FolderSummary {
             actions.append(
                 FolderActionItem(
                     title: "Review \(largeFiles.count) \(largeFiles.count == 1 ? "large file" : "large files")",
-                    detail: "Start with files over 100 MB to quickly reclaim disk space.",
+                    detail: "Start with files over \(settings.largeFileThresholdMB) MB to quickly reclaim disk space.",
                     systemImage: "externaldrive.badge.exclamationmark"
                 )
             )
@@ -243,7 +246,7 @@ struct FolderSummary {
             actions.append(
                 FolderActionItem(
                     title: "Archive or remove \(oldFiles.count) \(oldFiles.count == 1 ? "old file" : "old files")",
-                    detail: "These files have not changed for more than one year.",
+                    detail: "These files have not changed for more than \(settings.oldFileAgeYears) \(settings.oldFileAgeYears == 1 ? "year" : "years").",
                     systemImage: "clock.badge.exclamationmark"
                 )
             )

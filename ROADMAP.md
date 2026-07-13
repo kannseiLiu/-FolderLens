@@ -5,7 +5,7 @@ FolderLens is moving toward a practical, polished macOS utility for local folder
 ## Near Term
 
 - Add real screenshots to the README.
-- Rename the Xcode project, app target, and bundle metadata from `RunBoard` to `FolderLens`.
+- Rename the Xcode project and app target from `RunBoard` to `FolderLens`.
 - Add a signed release build and GitHub Release notes.
 - Improve the Health Score explanation inside the app.
 - Add a report preview before exporting Markdown.
@@ -16,7 +16,7 @@ FolderLens is moving toward a practical, polished macOS utility for local folder
 - Upgrade duplicate detection from name/size matching to optional content hashing.
 - Add scan progress and cancellation for very large directories.
 - Add export options for CSV and JSON.
-- Add user-configurable thresholds for large files and old files.
+- Add reusable scan presets for common workflows such as Downloads cleanup, project audit, and photo archive review.
 
 ## Quality Improvements
 

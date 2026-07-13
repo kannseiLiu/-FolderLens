@@ -12,13 +12,18 @@ All notable changes to FolderLens will be documented in this file.
 - Added Folder Size Hotspots for ranking nested folders by disk usage.
 - Added Potential Duplicates based on matching file name and file size.
 - Added reviewable and recoverable space estimates.
+- Added configurable scan settings for large files, old files, and hidden files.
 - Added health score and action plan sections to exported Markdown reports.
 - Added folder hotspot and duplicate sections to exported Markdown reports.
+- Added active scan settings to exported Markdown reports.
 - Added unit tests for healthy and cleanup-heavy folder summaries.
 - Added unit tests for analyzer-generated folder hotspots, duplicate groups, and space estimates.
+- Added unit test coverage for custom cleanup thresholds.
 
 ### Changed
 
 - Updated the folder summary dashboard to surface health and next steps near the top.
 - Extracted folder summary logic into a reusable analyzer for test coverage.
+- Updated cleanup labels and action plan text to follow the user's scan settings.
+- Set the generated app display name to FolderLens.
 - Reworked the README around real product value, usage, safety, tests, and roadmap.

@@ -12,6 +12,7 @@ It helps you answer the questions Finder does not surface quickly: what is takin
 - Browse folders, preview images and text-like files, and open items in Finder.
 - Search by file name and filter by images, PDFs, videos, archives, code, text, and large files.
 - Toggle Deep Scan to analyze nested folders recursively.
+- Tune scan settings for large-file thresholds, old-file age, and hidden-file handling.
 - See file type distribution, largest files, recently modified files, and safe cleanup candidates.
 - Get a Folder Health Score with a prioritized action plan.
 - Find folder size hotspots during Deep Scan.
@@ -23,13 +24,23 @@ It helps you answer the questions Finder does not surface quickly: what is takin
 
 FolderLens scores a folder from 0 to 100 based on signals that usually matter during cleanup:
 
-- large files over 100 MB
-- files not modified for more than one year
+- large files over your selected threshold
+- files not modified for longer than your selected age threshold
 - temporary, cache-like, or backup files
 - uncategorized file types
 - whether the scan is shallow or recursive
 
 The score is paired with a status such as Excellent, Good, Needs review, or Critical, plus an action plan that tells you what to inspect first. FolderLens never deletes files automatically.
+
+## Scan Settings
+
+FolderLens keeps scan settings in the sidebar so each report can match the folder you are reviewing:
+
+- Large file threshold: choose what counts as a meaningful disk-space target.
+- Old file threshold: tune how aggressively the app flags stale files.
+- Hidden files: skip them for normal review, or include them when auditing project/tooling folders.
+
+Exported Markdown reports include the active settings so the result remains explainable later.
 
 ## Deep Scan Insights
 
@@ -103,6 +114,7 @@ RunBoard/
 Core files:
 
 - `ContentView.swift`: folder selection, navigation, scanning, filtering, and Markdown export
+- `ScanSettings.swift`: persisted scan thresholds and hidden-file policy
 - `FolderSummary.swift`: summary data, health score, and action plan model
 - `FolderSummaryView.swift`: dashboard, statistics, cleanup suggestions, and health overview
 - `FilePreviewView.swift`: file actions and image/text previews
