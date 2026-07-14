@@ -249,6 +249,75 @@ struct RunBoardTests {
         #expect(summary.recoverableSize <= summary.reviewableSize)
     }
 
+    @Test func summaryMergesOverlappingGroupsWithSameDigest() async throws {
+        let first = file("/tmp/Workspace/A.bin", size: 10 * 1024 * 1024)
+        let duplicateFirst = file("/tmp/Workspace/./A.bin", size: 10 * 1024 * 1024)
+        let second = file("/tmp/Workspace/B.bin", size: 10 * 1024 * 1024)
+        let third = file("/tmp/Workspace/C.bin", size: 10 * 1024 * 1024)
+        let digest = String(repeating: "k", count: 64)
+
+        let summary = makeSummary(
+            totalCount: 4,
+            totalSize: 30 * 1024 * 1024,
+            duplicateGroups: [
+                .init(digest: digest, files: [first, second]),
+                .init(digest: digest, files: [duplicateFirst, third])
+            ]
+        )
+
+        #expect(summary.duplicateGroups.map(\.digest) == [digest])
+        #expect(summary.duplicateGroups[0].files.map { $0.url.standardizedFileURL.path } == [
+            first.url.standardizedFileURL.path,
+            second.url.standardizedFileURL.path,
+            third.url.standardizedFileURL.path
+        ])
+        #expect(summary.reviewableSize == 30 * 1024 * 1024)
+        #expect(summary.recoverableSize == 20 * 1024 * 1024)
+    }
+
+    @Test func summaryNormalizesDirectDuplicateGroupInput() async throws {
+        let first = file("/tmp/Workspace/A.bin", size: 10 * 1024 * 1024)
+        let second = file("/tmp/Workspace/B.bin", size: 10 * 1024 * 1024)
+        let third = file("/tmp/Workspace/C.bin", size: 10 * 1024 * 1024)
+        let fourth = file("/tmp/Workspace/D.bin", size: 10 * 1024 * 1024)
+        let crossDigestDuplicate = file("/tmp/Workspace/./A.bin", size: 10 * 1024 * 1024)
+        let crossDigestOnly = file("/tmp/Workspace/X.bin", size: 10 * 1024 * 1024)
+        let validOtherA = file("/tmp/Workspace/E.bin", size: 5 * 1024 * 1024)
+        let validOtherB = file("/tmp/Workspace/F.bin", size: 5 * 1024 * 1024)
+        let zero = file("/tmp/Workspace/zero.bin", size: 0)
+        let single = file("/tmp/Workspace/single.bin", size: 10 * 1024 * 1024)
+        let mismatched = file("/tmp/Workspace/mismatched.bin", size: 20 * 1024 * 1024)
+        let firstDigest = String(repeating: "l", count: 64)
+        let secondDigest = String(repeating: "m", count: 64)
+
+        let summary = makeSummary(
+            totalCount: 10,
+            totalSize: 50 * 1024 * 1024,
+            duplicateGroups: [
+                .init(digest: firstDigest, files: [first, second]),
+                .init(digest: firstDigest, files: [third, fourth]),
+                .init(digest: secondDigest, files: [crossDigestDuplicate, crossDigestOnly]),
+                .init(digest: String(repeating: "n", count: 64), files: [zero, zero]),
+                .init(digest: String(repeating: "o", count: 64), files: [single]),
+                .init(digest: String(repeating: "p", count: 64), files: [first, mismatched]),
+                .init(digest: String(repeating: "q", count: 64), files: [validOtherA, validOtherB])
+            ]
+        )
+
+        #expect(summary.duplicateGroups.map(\.digest) == [firstDigest, String(repeating: "q", count: 64)])
+        #expect(summary.duplicateGroups[0].files.map { $0.url.standardizedFileURL.path } == [
+            first.url.standardizedFileURL.path,
+            second.url.standardizedFileURL.path,
+            third.url.standardizedFileURL.path,
+            fourth.url.standardizedFileURL.path
+        ])
+        #expect(summary.healthScore == 84)
+        #expect(summary.actionPlan.contains { $0.title == "Inspect 2 verified duplicate groups" })
+        #expect(summary.reviewableSize == 50 * 1024 * 1024)
+        #expect(summary.recoverableSize == 35 * 1024 * 1024)
+        #expect(summary.recoverableSize <= summary.reviewableSize)
+    }
+
     @Test func summaryCountsOnlyVerifiedExtraCopiesAsRecoverable() async throws {
         let copies = [
             file("/tmp/Workspace/A/first.bin", size: 10 * 1024 * 1024),

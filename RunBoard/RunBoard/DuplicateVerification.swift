@@ -14,20 +14,13 @@ struct DuplicateVerificationIssue: Identifiable, Equatable, Sendable {
     }
 }
 
-struct DuplicateFileGroup: Identifiable, Equatable, @unchecked Sendable {
+struct DuplicateFileGroup: Identifiable, Equatable, Sendable {
     let digest: String
     let files: [FileItem]
 
     init(digest: String, files: [FileItem]) {
         self.digest = digest
         self.files = files
-    }
-
-    init(displayName: String, files: [FileItem]) {
-        self.init(
-            digest: "\(displayName.lowercased())-\(files.first?.size ?? 0)",
-            files: files
-        )
     }
 
     var id: String {

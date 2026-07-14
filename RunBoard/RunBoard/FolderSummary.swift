@@ -131,7 +131,7 @@ struct FolderSummary {
         self.temporaryFiles = temporaryFiles
         self.isDeepScan = isDeepScan
         self.largestFolders = largestFolders
-        self.duplicateGroups = duplicateGroups
+        self.duplicateGroups = Self.normalizedDuplicateGroups(duplicateGroups)
         self.verificationIssues = verificationIssues
         self.settings = settings
     }
@@ -167,7 +167,7 @@ struct FolderSummary {
             return total + Int64(additionalCopies) * group.fileSize
         }
 
-        return min(temporarySize + duplicateSize, reviewableSize)
+        return temporarySize + duplicateSize
     }
 
     var formattedReviewableSize: String {
@@ -278,5 +278,47 @@ struct FolderSummary {
         return files.filter {
             seenPaths.insert($0.url.standardizedFileURL.path).inserted
         }
+    }
+
+    private static func normalizedDuplicateGroups(_ groups: [DuplicateFileGroup]) -> [DuplicateFileGroup] {
+        var filesByDigest: [String: [FileItem]] = [:]
+        var digests: [String] = []
+
+        for group in groups {
+            if filesByDigest[group.digest] == nil {
+                digests.append(group.digest)
+            }
+            filesByDigest[group.digest, default: []].append(contentsOf: group.files)
+        }
+
+        var acceptedGroups: [DuplicateFileGroup] = []
+        var claimedPaths: Set<String> = []
+
+        for digest in digests {
+            guard let files = filesByDigest[digest] else { continue }
+
+            var groupPaths: Set<String> = []
+            let uniqueFiles = files.filter { file in
+                guard file.size > 0 else { return false }
+                return groupPaths.insert(file.url.standardizedFileURL.path).inserted
+            }
+
+            guard uniqueFiles.count >= 2,
+                  let fileSize = uniqueFiles.first?.size,
+                  uniqueFiles.allSatisfy({ $0.size == fileSize }) else {
+                continue
+            }
+
+            let unclaimedFiles = uniqueFiles.filter {
+                !claimedPaths.contains($0.url.standardizedFileURL.path)
+            }
+
+            guard unclaimedFiles.count >= 2 else { continue }
+
+            claimedPaths.formUnion(unclaimedFiles.map { $0.url.standardizedFileURL.path })
+            acceptedGroups.append(DuplicateFileGroup(digest: digest, files: unclaimedFiles))
+        }
+
+        return acceptedGroups
     }
 }

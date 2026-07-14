@@ -84,7 +84,6 @@ struct FolderAnalyzer {
             .filter { !$0.isDirectory && isTemporaryCandidate($0) }
             .prefix(10)
             .map { $0 }
-        let duplicateGroups = normalizedDuplicateGroups(duplicateVerification.groups)
 
         return FolderSummary(
             folderURL: folderURL,
@@ -108,42 +107,10 @@ struct FolderAnalyzer {
             temporaryFiles: temporaryFiles,
             isDeepScan: isDeepScan,
             largestFolders: makeLargestFolders(root: folderURL, files: files),
-            duplicateGroups: duplicateGroups,
+            duplicateGroups: duplicateVerification.groups,
             verificationIssues: duplicateVerification.issues,
             settings: settings
         )
-    }
-
-    private static func normalizedDuplicateGroups(_ groups: [DuplicateFileGroup]) -> [DuplicateFileGroup] {
-        var acceptedGroups: [DuplicateFileGroup] = []
-        var claimedPaths: Set<String> = []
-
-        for group in groups {
-            var groupPaths: Set<String> = []
-            let uniqueFiles = group.files.filter { file in
-                guard file.size > 0 else { return false }
-                return groupPaths.insert(file.url.standardizedFileURL.path).inserted
-            }
-
-            guard uniqueFiles.count >= 2,
-                  let fileSize = uniqueFiles.first?.size,
-                  uniqueFiles.allSatisfy({ $0.size == fileSize }) else {
-                continue
-            }
-
-            let unclaimedFiles = uniqueFiles.filter {
-                !claimedPaths.contains($0.url.standardizedFileURL.path)
-            }
-
-            guard unclaimedFiles.count >= 2 else {
-                continue
-            }
-
-            claimedPaths.formUnion(unclaimedFiles.map { $0.url.standardizedFileURL.path })
-            acceptedGroups.append(DuplicateFileGroup(digest: group.digest, files: unclaimedFiles))
-        }
-
-        return acceptedGroups
     }
 
     private static func makeLargestFolders(root: URL, files: [FileItem]) -> [FolderHotspot] {
