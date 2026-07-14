@@ -10,7 +10,7 @@ All notable changes to FolderLens will be documented in this file.
 - Added health levels: Excellent, Good, Needs review, and Critical.
 - Added an Action Plan that prioritizes large files, old files, temporary files, and uncategorized items.
 - Added Folder Size Hotspots for ranking nested folders by disk usage.
-- Added automatic SHA-256 verification for same-size duplicate candidates, including differently named files.
+- Added automatic SHA-256 verification for non-empty, same-size duplicate candidates, including differently named files.
 - Added bounded, chunked file reads so duplicate verification does not load entire files into memory.
 - Added visible duplicate-verification progress and cancellation through the existing scan control.
 - Added Verification Issues to the summary and Markdown report for files that changed or could not be hashed.
