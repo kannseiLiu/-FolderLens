@@ -109,6 +109,9 @@ struct DuplicateVerifier: DuplicateVerifying {
         guard try metadata(for: handle) == before else {
             throw VerificationError.fileChanged
         }
+        guard try pathMetadata(for: file.url) == before else {
+            throw VerificationError.fileChanged
+        }
 
         return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
@@ -134,14 +137,15 @@ struct DuplicateVerifier: DuplicateVerifying {
         guard fstat(handle.fileDescriptor, &fileStatus) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
-        return FileMetadata(
-            size: Int64(fileStatus.st_size),
-            modifiedDate: Date(
-                timeIntervalSince1970: TimeInterval(fileStatus.st_mtimespec.tv_sec)
-                    + TimeInterval(fileStatus.st_mtimespec.tv_nsec) / 1_000_000_000
-            ),
-            fileSystemIdentity: FileSystemIdentity(fileStatus: fileStatus)
-        )
+        return try FileMetadata(fileStatus: fileStatus)
+    }
+
+    private func pathMetadata(for url: URL) throws -> FileMetadata {
+        var fileStatus = stat()
+        guard lstat(url.path, &fileStatus) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        return try FileMetadata(fileStatus: fileStatus)
     }
 
     private func fileSort(_ first: FileItem, _ second: FileItem) -> Bool {
@@ -162,6 +166,18 @@ private struct FileMetadata: Equatable {
     let size: Int64
     let modifiedDate: Date?
     let fileSystemIdentity: FileSystemIdentity
+
+    init(fileStatus: stat) throws {
+        guard (fileStatus.st_mode & S_IFMT) == S_IFREG else {
+            throw VerificationError.fileChanged
+        }
+        self.size = Int64(fileStatus.st_size)
+        self.modifiedDate = Date(
+            timeIntervalSince1970: TimeInterval(fileStatus.st_mtimespec.tv_sec)
+                + TimeInterval(fileStatus.st_mtimespec.tv_nsec) / 1_000_000_000
+        )
+        self.fileSystemIdentity = FileSystemIdentity(fileStatus: fileStatus)
+    }
 
     func matchesScannedFile(_ file: FileItem, expectedIdentity: FileSystemIdentity) -> Bool {
         guard size == file.size, fileSystemIdentity == expectedIdentity else {

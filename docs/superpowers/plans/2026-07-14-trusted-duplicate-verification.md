@@ -168,7 +168,7 @@ let candidates = Dictionary(
 
 For each candidate, open a `FileHandle`, repeatedly call `read(upToCount:)`, update `SHA256`, check cancellation between reads, and close the handle with `defer`. Produce lowercase hexadecimal digest text with two characters per byte. Group successful `(FileItem, digest)` pairs first by original byte size and then digest, retaining only groups with at least two files.
 
-Read `.fileSizeKey` and `.contentModificationDateKey` before and after hashing. Compare pre-hash values with the scanned `FileItem` when available and compare pre-hash with post-hash. A mismatch, missing file, or read failure creates one issue and excludes the file.
+After opening each candidate, read descriptor metadata with `fstat` and compare its size, modification date, and filesystem identity with the scanned `FileItem`. After hashing, compare the descriptor metadata again and use non-following path metadata (`lstat`) to confirm the path still names the same regular file. A mismatch, missing file, path replacement, or read failure creates one issue and excludes the file.
 
 Emit `0 / totalFileCount` once before opening the first candidate, then emit
 progress exactly once after every candidate finishes, whether it hashes
