@@ -447,6 +447,39 @@ struct RunBoardTests {
         #expect(summary.recoverableSize == 10 * 1024 * 1024)
     }
 
+    @Test func summaryNormalizesDuplicateHardLinksByIdentity() async throws {
+        let original = file(
+            "/tmp/Workspace/original.bin",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 10)
+        )
+        let hardLink = file(
+            "/tmp/Workspace/hard-link.bin",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 10)
+        )
+        let independentCopy = file(
+            "/tmp/Workspace/copy.bin",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 11)
+        )
+
+        let summary = makeSummary(
+            totalCount: 3,
+            totalSize: 30 * 1024 * 1024,
+            duplicateGroups: [
+                .init(
+                    digest: String(repeating: "e", count: 64),
+                    files: [original, hardLink, independentCopy]
+                )
+            ]
+        )
+
+        #expect(summary.duplicateGroups.count == 1)
+        #expect(summary.duplicateGroups[0].files.map(\.name) == ["original.bin", "copy.bin"])
+        #expect(summary.recoverableSize == 10 * 1024 * 1024)
+    }
+
     private func makeSummary(
         totalCount: Int,
         totalSize: Int64,

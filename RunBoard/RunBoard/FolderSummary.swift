@@ -281,6 +281,10 @@ struct FolderSummary {
     }
 
     private func fileUniquenessKey(for file: FileItem) -> String {
+        Self.fileUniquenessKey(for: file)
+    }
+
+    private static func fileUniquenessKey(for file: FileItem) -> String {
         if let identity = file.fileSystemIdentity {
             return "identity:\(identity.description)"
         }
@@ -299,15 +303,15 @@ struct FolderSummary {
         }
 
         var acceptedGroups: [DuplicateFileGroup] = []
-        var claimedPaths: Set<String> = []
+        var claimedKeys: Set<String> = []
 
         for digest in digests {
             guard let files = filesByDigest[digest] else { continue }
 
-            var groupPaths: Set<String> = []
+            var groupKeys: Set<String> = []
             let uniqueFiles = files.filter { file in
                 guard file.size > 0 else { return false }
-                return groupPaths.insert(file.url.standardizedFileURL.path).inserted
+                return groupKeys.insert(Self.fileUniquenessKey(for: file)).inserted
             }
 
             guard uniqueFiles.count >= 2,
@@ -317,12 +321,12 @@ struct FolderSummary {
             }
 
             let unclaimedFiles = uniqueFiles.filter {
-                !claimedPaths.contains($0.url.standardizedFileURL.path)
+                !claimedKeys.contains(Self.fileUniquenessKey(for: $0))
             }
 
             guard unclaimedFiles.count >= 2 else { continue }
 
-            claimedPaths.formUnion(unclaimedFiles.map { $0.url.standardizedFileURL.path })
+            claimedKeys.formUnion(unclaimedFiles.map { Self.fileUniquenessKey(for: $0) })
             acceptedGroups.append(DuplicateFileGroup(digest: digest, files: unclaimedFiles))
         }
 

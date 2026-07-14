@@ -83,8 +83,11 @@ struct DuplicateVerifier: DuplicateVerifying {
     }
 
     private func hash(_ file: FileItem) async throws -> String {
+        guard let expectedIdentity = file.fileSystemIdentity else {
+            throw VerificationError.metadataUnavailable
+        }
         let before = try metadata(for: file.url)
-        guard before.size == file.size else {
+        guard before.size == file.size, before.fileSystemIdentity == expectedIdentity else {
             throw VerificationError.fileChanged
         }
         if let modifiedDate = file.modifiedDate, before.modifiedDate != modifiedDate {
@@ -135,7 +138,11 @@ struct DuplicateVerifier: DuplicateVerifying {
         guard let size = values.fileSize else {
             throw VerificationError.metadataUnavailable
         }
-        return FileMetadata(size: Int64(size), modifiedDate: values.contentModificationDate)
+        return FileMetadata(
+            size: Int64(size),
+            modifiedDate: values.contentModificationDate,
+            fileSystemIdentity: try FileSystemIdentity(fileURL: url)
+        )
     }
 
     private func fileSort(_ first: FileItem, _ second: FileItem) -> Bool {
@@ -153,6 +160,7 @@ struct DuplicateVerifier: DuplicateVerifying {
 private struct FileMetadata: Equatable {
     let size: Int64
     let modifiedDate: Date?
+    let fileSystemIdentity: FileSystemIdentity
 }
 
 private enum VerificationError: LocalizedError {

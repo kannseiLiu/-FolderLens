@@ -66,7 +66,7 @@ struct FileItem: Identifiable, Hashable, Sendable {
         self.url = url
         self.name = name
         self.isDirectory = isDirectory
-        self.isRegularFile = isRegularFile ?? !isDirectory
+        self.isRegularFile = isRegularFile ?? false
         self.isSymbolicLink = isSymbolicLink
         self.size = size
         self.modifiedDate = modifiedDate

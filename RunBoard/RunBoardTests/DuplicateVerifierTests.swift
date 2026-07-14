@@ -107,6 +107,39 @@ struct DuplicateVerifierTests {
         #expect(result.issues.map(\.url) == [changed])
     }
 
+    @Test func replacedPathWithSameSizeAndMTimeIsExcludedAndReported() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let stable = try write("same payload", to: root.appendingPathComponent("stable.bin"))
+        let replaced = try write("same payload", to: root.appendingPathComponent("z-replaced.bin"))
+        let replacementSource = try write("same payload", to: root.appendingPathComponent("replacement-source.bin"))
+        let originalModifiedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: originalModifiedDate], ofItemAtPath: replaced.path)
+        try FileManager.default.setAttributes([.modificationDate: originalModifiedDate], ofItemAtPath: stable.path)
+        try FileManager.default.setAttributes([.modificationDate: originalModifiedDate], ofItemAtPath: replacementSource.path)
+        let files = [item(replaced), item(stable)]
+        let gate = ChunkGate()
+        let verifier = DuplicateVerifier(chunkSize: 4, chunkObserver: { url, index in
+            guard url == stable, index == 0 else {
+                return
+            }
+            await gate.pause()
+        })
+        let verification = Task {
+            try await verifier.verify(files: files, onProgress: { _ in })
+        }
+
+        await gate.waitUntilPaused()
+        try FileManager.default.removeItem(at: replaced)
+        try FileManager.default.linkItem(at: replacementSource, to: replaced)
+        try FileManager.default.setAttributes([.modificationDate: originalModifiedDate], ofItemAtPath: replaced.path)
+        await gate.release()
+        let result = try await verification.value
+
+        #expect(result.groups.isEmpty)
+        #expect(result.issues.map(\.url) == [replaced])
+    }
+
     @Test func cancellationBetweenChunksThrowsCancellationError() async throws {
         let root = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: root) }
