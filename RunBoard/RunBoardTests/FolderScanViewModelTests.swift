@@ -26,6 +26,170 @@ struct FolderScanViewModelTests {
         #expect(model.warnings == [warning])
     }
 
+    @Test func completedMetadataScanAutomaticallyStartsVerification() async throws {
+        let scanner = ControlledScanner()
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Verification-Starts")
+        let file = makeFile(root.appendingPathComponent("candidate.txt"), size: 10)
+
+        model.start(context: .init(folderURL: root, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(1)
+        await scanner.completeRequest(
+            at: 0,
+            with: .init(directChildren: [file], analysisItems: [file], warnings: [])
+        )
+        await verifier.waitForRequestCount(1)
+
+        #expect(model.status == .verifyingDuplicates)
+        #expect(model.files.isEmpty)
+        #expect(model.summary == nil)
+        #expect(model.verificationProgress == .init(completedFileCount: 0, totalFileCount: 0))
+
+        await verifier.publishProgress(.init(completedFileCount: 0, totalFileCount: 1), forRequestAt: 0)
+
+        #expect(model.verificationProgress == .init(completedFileCount: 0, totalFileCount: 1))
+
+        await verifier.completeRequest(at: 0, with: .empty)
+        await waitUntilSettled(model)
+    }
+
+    @Test func completedVerificationPublishesVerifiedSummaryAndIssues() async throws {
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Verification-Completes")
+        let file = makeFile(root.appendingPathComponent("report.txt"), size: 10)
+        let issue = DuplicateVerificationIssue(url: file.url, message: "Unreadable")
+        let scanner = ImmediateScanner(
+            result: .init(directChildren: [file], analysisItems: [file], warnings: [])
+        )
+        let verifier = ImmediateVerifier(
+            result: .init(groups: [], issues: [issue]),
+            totalFileCount: 1
+        )
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+
+        model.start(context: .init(folderURL: root, isDeepScan: false, settings: .default))
+        await waitUntilSettled(model)
+
+        #expect(model.status == .completed)
+        #expect(model.files.map(\.name) == ["report.txt"])
+        #expect(model.summary?.folderURL == root)
+        #expect(model.verificationIssues == [issue])
+        #expect(model.verificationProgress == .init(completedFileCount: 1, totalFileCount: 1))
+    }
+
+    @Test func noCandidatesStillCompletesThroughVerifier() async throws {
+        let scanner = ImmediateScanner(
+            result: .init(directChildren: [], analysisItems: [], warnings: [])
+        )
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-No-Candidates")
+
+        model.start(context: .init(folderURL: root, isDeepScan: false, settings: .default))
+        await verifier.waitForRequestCount(1)
+
+        #expect(await verifier.files(forRequestAt: 0).isEmpty)
+        #expect(model.status == .verifyingDuplicates)
+
+        await verifier.completeRequest(at: 0, with: .empty)
+        await waitUntilSettled(model)
+
+        #expect(model.status == .completed)
+        #expect(model.verificationProgress == .init(completedFileCount: 0, totalFileCount: 0))
+    }
+
+    @Test func cancellingVerificationPublishesCancelledAndIgnoresLateCompletion() async throws {
+        let scanner = ImmediateScanner(
+            result: result(named: "late.txt", root: URL(fileURLWithPath: "/tmp/FolderLens-Cancel-Verification"))
+        )
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Cancel-Verification")
+
+        model.start(context: .init(folderURL: root, isDeepScan: true, settings: .default))
+        await verifier.waitForRequestCount(1)
+        model.cancel()
+        await verifier.completeRequest(at: 0, with: .empty)
+        await Task.yield()
+
+        #expect(model.status == .cancelled)
+        #expect(model.files.isEmpty)
+        #expect(model.summary == nil)
+        #expect(model.verificationProgress == nil)
+    }
+
+    @Test func supersededVerificationCannotReplaceNewerScan() async throws {
+        let scanner = ControlledScanner()
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+        let firstRoot = URL(fileURLWithPath: "/tmp/FolderLens-First-Verification")
+        let secondRoot = URL(fileURLWithPath: "/tmp/FolderLens-Second-Verification")
+
+        model.start(context: .init(folderURL: firstRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(1)
+        await scanner.completeRequest(at: 0, with: result(named: "old.txt", root: firstRoot))
+        await verifier.waitForRequestCount(1)
+
+        model.start(context: .init(folderURL: secondRoot, isDeepScan: true, settings: .default))
+        await scanner.waitForRequestCount(2)
+        await scanner.completeRequest(at: 1, with: result(named: "new.txt", root: secondRoot))
+        await verifier.waitForRequestCount(2)
+        await verifier.completeRequest(at: 1, with: .empty)
+        await waitUntilSettled(model)
+        await verifier.completeRequest(at: 0, with: .empty)
+        await Task.yield()
+
+        #expect(model.status == .completed)
+        #expect(model.files.map(\.name) == ["new.txt"])
+        #expect(model.summary?.folderURL == secondRoot)
+    }
+
+    @Test func cancelledVerificationIgnoresLateProgressAndFailure() async throws {
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Cancel-Verification-Progress")
+        let scanner = ImmediateScanner(result: result(named: "late.txt", root: root))
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+
+        model.start(context: .init(folderURL: root, isDeepScan: true, settings: .default))
+        await verifier.waitForRequestCount(1)
+        model.cancel()
+        await verifier.publishProgress(.init(completedFileCount: 1, totalFileCount: 1), forRequestAt: 0)
+        await verifier.failRequest(at: 0)
+        await Task.yield()
+
+        #expect(model.status == .cancelled)
+        #expect(model.verificationProgress == nil)
+    }
+
+    @Test func sameContextCancelledVerificationPreservesPreviousCompletedSummary() async throws {
+        let scanner = ControlledScanner()
+        let verifier = ControlledVerifier()
+        let model = FolderScanViewModel(scanner: scanner, verifier: verifier)
+        let root = URL(fileURLWithPath: "/tmp/FolderLens-Preserve-Verification")
+        let context = FolderScanContext(folderURL: root, isDeepScan: true, settings: .default)
+        let issue = DuplicateVerificationIssue(url: root.appendingPathComponent("kept.txt"), message: "Unreadable")
+
+        model.start(context: context)
+        await scanner.waitForRequestCount(1)
+        await scanner.completeRequest(at: 0, with: result(named: "kept.txt", root: root))
+        await verifier.waitForRequestCount(1)
+        await verifier.completeRequest(at: 0, with: .init(groups: [], issues: [issue]))
+        await waitUntilSettled(model)
+
+        model.start(context: context)
+        await scanner.waitForRequestCount(2)
+        await scanner.completeRequest(at: 1, with: result(named: "replacement.txt", root: root))
+        await verifier.waitForRequestCount(2)
+        model.cancel()
+        await verifier.completeRequest(at: 1, with: .empty)
+        await Task.yield()
+
+        #expect(model.status == .cancelled)
+        #expect(model.files.map(\.name) == ["kept.txt"])
+        #expect(model.summary?.folderURL == root)
+        #expect(model.verificationIssues == [issue])
+    }
+
     @Test func cancellingScanPublishesCancelledAndIgnoresLateCompletion() async throws {
         let scanner = ControlledScanner()
         let model = FolderScanViewModel(scanner: scanner)
@@ -188,7 +352,7 @@ struct FolderScanViewModelTests {
     }
 
     private func waitUntilSettled(_ model: FolderScanViewModel) async {
-        while model.status == .scanning {
+        while model.status == .scanning || model.status == .verifyingDuplicates {
             await Task.yield()
         }
     }
@@ -211,6 +375,20 @@ private struct ImmediateScanner: FolderScanning {
         onProgress: @escaping FolderScanProgressHandler
     ) async throws -> FolderScanResult {
         await onProgress(.init(processedItemCount: result.analysisItems.count))
+        return result
+    }
+}
+
+private struct ImmediateVerifier: DuplicateVerifying {
+    let result: DuplicateVerificationResult
+    let totalFileCount: Int
+
+    func verify(
+        files: [FileItem],
+        onProgress: @escaping DuplicateVerificationProgressHandler
+    ) async throws -> DuplicateVerificationResult {
+        await onProgress(.init(completedFileCount: 0, totalFileCount: totalFileCount))
+        await onProgress(.init(completedFileCount: totalFileCount, totalFileCount: totalFileCount))
         return result
     }
 }
@@ -249,6 +427,49 @@ private actor ControlledScanner: FolderScanning {
     }
 
     func publishProgress(_ progress: FolderScanProgress, forRequestAt index: Int) async {
+        await requests[index].onProgress(progress)
+    }
+}
+
+private actor ControlledVerifier: DuplicateVerifying {
+    private struct Request {
+        let files: [FileItem]
+        let onProgress: DuplicateVerificationProgressHandler
+        var continuation: CheckedContinuation<DuplicateVerificationResult, Error>?
+    }
+
+    private var requests: [Request] = []
+
+    func verify(
+        files: [FileItem],
+        onProgress: @escaping DuplicateVerificationProgressHandler
+    ) async throws -> DuplicateVerificationResult {
+        try await withCheckedThrowingContinuation { continuation in
+            requests.append(.init(files: files, onProgress: onProgress, continuation: continuation))
+        }
+    }
+
+    func waitForRequestCount(_ count: Int) async {
+        while requests.count < count {
+            await Task.yield()
+        }
+    }
+
+    func files(forRequestAt index: Int) -> [FileItem] {
+        requests[index].files
+    }
+
+    func completeRequest(at index: Int, with result: DuplicateVerificationResult) {
+        requests[index].continuation?.resume(returning: result)
+        requests[index].continuation = nil
+    }
+
+    func failRequest(at index: Int) {
+        requests[index].continuation?.resume(throwing: ControlledScannerError.expected)
+        requests[index].continuation = nil
+    }
+
+    func publishProgress(_ progress: DuplicateVerificationProgress, forRequestAt index: Int) async {
         await requests[index].onProgress(progress)
     }
 }

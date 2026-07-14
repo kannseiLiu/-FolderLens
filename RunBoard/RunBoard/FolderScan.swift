@@ -26,6 +26,7 @@ struct FolderScanResult {
 enum FolderScanStatus: Equatable {
     case idle
     case scanning
+    case verifyingDuplicates
     case completed
     case cancelled
     case failed(String)
