@@ -27,7 +27,8 @@ struct FolderScanService: FolderScanning {
             .isDirectoryKey,
             .isSymbolicLinkKey,
             .fileSizeKey,
-            .contentModificationDateKey
+            .contentModificationDateKey,
+            .fileResourceIdentifierKey
         ]
         var warnings: [FolderScanWarning] = []
 
@@ -105,8 +106,10 @@ struct FolderScanService: FolderScanning {
             url: url,
             name: url.lastPathComponent,
             isDirectory: values.isDirectory ?? false,
+            isSymbolicLink: values.isSymbolicLink ?? false,
             size: Int64(values.fileSize ?? 0),
-            modifiedDate: values.contentModificationDate
+            modifiedDate: values.contentModificationDate,
+            fileSystemIdentity: values.fileResourceIdentifier.map { String(describing: $0) }
         )
     }
 

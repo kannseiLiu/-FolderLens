@@ -57,10 +57,7 @@ struct FolderReportBuilder {
         }
         .joined(separator: "\n")
 
-        let verificationIssueRows = summary.verificationIssues.map { issue in
-            "| \(formatPathCode(issue.url.path)) | \(escapeMarkdownTableText(issue.message)) |"
-        }
-        .joined(separator: "\n")
+        let verificationIssuesSection = makeVerificationIssuesSection(summary.verificationIssues)
 
         let allFileRows = sortedFiles.map { file in
             let sizeText = file.isDirectory ? "-" : file.formattedSize
@@ -131,12 +128,7 @@ struct FolderReportBuilder {
         |---|---:|---:|---:|---|---|
         \(duplicateRows.isEmpty ? "| No verified duplicates found | - | - | - | - | - |" : duplicateRows)
 
-        ## Verification Issues
-
-        | Path | Reason |
-        |---|---|
-        \(verificationIssueRows.isEmpty ? "| No verification issues | - |" : verificationIssueRows)
-
+        \(verificationIssuesSection)
         ## Cleanup Suggestions
 
         FolderLens only provides safe suggestions and never deletes files automatically.
@@ -190,6 +182,26 @@ struct FolderReportBuilder {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
         return formatter.string(from: date)
+    }
+
+    private func makeVerificationIssuesSection(_ issues: [DuplicateVerificationIssue]) -> String {
+        guard !issues.isEmpty else {
+            return ""
+        }
+
+        let rows = issues.map { issue in
+            "| \(formatPathCode(issue.url.path)) | \(escapeMarkdownTableText(issue.message)) |"
+        }
+        .joined(separator: "\n")
+
+        return """
+        ## Verification Issues
+
+        | Path | Reason |
+        |---|---|
+        \(rows)
+
+        """
     }
 
     private func escapeMarkdownTableText(_ text: String) -> String {

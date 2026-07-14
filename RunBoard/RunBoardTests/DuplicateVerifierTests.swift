@@ -148,6 +148,42 @@ struct DuplicateVerifierTests {
         #expect(result.groups[0].recoverableSize == 14)
     }
 
+    @Test func hardLinksToSameFileDoNotCreateRecoverableCopies() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try write("shared payload", to: root.appendingPathComponent("original.bin"))
+        let hardLink = root.appendingPathComponent("hard-link.bin")
+        try FileManager.default.linkItem(at: original, to: hardLink)
+        let independentCopy = try write("shared payload", to: root.appendingPathComponent("copy.bin"))
+
+        let result = try await DuplicateVerifier().verify(
+            files: [item(original), item(hardLink), item(independentCopy)],
+            onProgress: { _ in }
+        )
+
+        #expect(result.groups.count == 1)
+        #expect(result.groups[0].files.map(\.name) == ["copy.bin", "original.bin"])
+        #expect(result.groups[0].recoverableSize == 14)
+    }
+
+    @Test func symbolicLinksAreExcludedFromVerificationCandidates() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try write("same payload", to: root.appendingPathComponent("original.bin"))
+        let independentCopy = try write("same payload", to: root.appendingPathComponent("copy.bin"))
+        let symlink = root.appendingPathComponent("link.bin")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: original)
+
+        let result = try await DuplicateVerifier().verify(
+            files: [item(original), item(independentCopy), item(symlink)],
+            onProgress: { _ in }
+        )
+
+        #expect(result.groups.count == 1)
+        #expect(result.groups[0].files.map(\.name) == ["copy.bin", "original.bin"])
+        #expect(result.groups[0].recoverableSize == 12)
+    }
+
     private func temporaryFolder() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("FolderLensDuplicateVerifierTests-\(UUID().uuidString)", isDirectory: true)
@@ -161,13 +197,21 @@ struct DuplicateVerifierTests {
     }
 
     private func item(_ url: URL) -> FileItem {
-        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey])
+        let values = try? url.resourceValues(forKeys: [
+            .isDirectoryKey,
+            .isSymbolicLinkKey,
+            .fileSizeKey,
+            .contentModificationDateKey,
+            .fileResourceIdentifierKey
+        ])
         return FileItem(
             url: url,
             name: url.lastPathComponent,
             isDirectory: values?.isDirectory ?? false,
+            isSymbolicLink: values?.isSymbolicLink ?? false,
             size: Int64(values?.fileSize ?? 0),
-            modifiedDate: values?.contentModificationDate
+            modifiedDate: values?.contentModificationDate,
+            fileSystemIdentity: values?.fileResourceIdentifier.map { String(describing: $0) }
         )
     }
 }

@@ -56,8 +56,9 @@ containing verified groups and issues.
 
 Verification has two stages:
 
-1. Exclude directories and empty files, then group files by byte size. Retain
-   only groups containing at least two files.
+1. Exclude directories, symbolic links, empty files, and repeated paths to the
+   same file identity, then group files by byte size. Retain only groups
+   containing at least two files.
 2. Stream every retained file through CryptoKit SHA-256, then regroup successful
    hashes by digest. Retain only digest groups containing at least two files.
 
@@ -142,7 +143,9 @@ not sufficient.
 ## Performance Constraints
 
 - Enumeration and hashing never run on the main actor.
-- Only files in non-empty same-size groups are opened.
+- Only regular files in non-empty same-size groups are opened.
+- Symbolic links are not opened for duplicate verification, and hard links to
+  the same underlying file do not inflate copy counts or recoverable bytes.
 - File contents are read in 1 MiB chunks.
 - Hashing is serial in this increment.
 - Progress updates occur once per completed candidate file, which is naturally

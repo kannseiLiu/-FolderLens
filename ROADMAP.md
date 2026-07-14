@@ -4,7 +4,8 @@ FolderLens is moving toward a practical, polished macOS utility for local folder
 
 ## Completed Product Behavior
 
-- Automatically verify non-empty, same-size candidates with bounded, streamed SHA-256 reads.
+- Automatically verify non-empty, same-size regular-file candidates with bounded, streamed SHA-256 reads.
+- Keep duplicate estimates conservative by excluding symbolic links and counting hard-linked paths to the same file identity once.
 - Show verification progress and cancellation as part of the scan lifecycle.
 - Label and count only SHA-256-matching files as duplicates, while surfacing per-file verification issues.
 - Use verified groups for conservative recoverable-space estimates and Markdown reports.

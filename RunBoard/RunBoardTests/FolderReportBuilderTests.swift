@@ -132,6 +132,19 @@ struct FolderReportBuilderTests {
         #expect(generatedAtLine == "Generated at: 1970-01-01T00:00:00Z")
     }
 
+    @Test func reportOmitsVerificationIssuesSectionWhenThereAreNoIssues() {
+        let summary = makeSummary(files: [])
+
+        let markdown = FolderReportBuilder().makeMarkdown(
+            summary: summary,
+            files: [],
+            generatedAt: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(!markdown.contains("## Verification Issues"))
+        #expect(!markdown.contains("| No verification issues | - |"))
+    }
+
     private func makeSummary(
         rootURL: URL = URL(fileURLWithPath: "/tmp/Workspace"),
         files: [FileItem],
@@ -170,8 +183,10 @@ struct FolderReportBuilderTests {
             url: URL(fileURLWithPath: path),
             name: URL(fileURLWithPath: path).lastPathComponent,
             isDirectory: false,
+            isSymbolicLink: false,
             size: size,
-            modifiedDate: Date(timeIntervalSince1970: 0)
+            modifiedDate: Date(timeIntervalSince1970: 0),
+            fileSystemIdentity: path
         )
     }
 }
