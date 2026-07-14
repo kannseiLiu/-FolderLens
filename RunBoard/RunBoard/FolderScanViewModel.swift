@@ -65,6 +65,7 @@ final class FolderScanViewModel: ObservableObject {
                     for: context.folderURL,
                     files: result.analysisItems,
                     isDeepScan: context.isDeepScan,
+                    verification: verification,
                     settings: context.settings
                 )
                 warnings = result.warnings

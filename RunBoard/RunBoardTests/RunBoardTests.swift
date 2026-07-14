@@ -11,6 +11,12 @@ import Foundation
 
 struct RunBoardTests {
 
+    @Test @MainActor func verificationStatusRemainsCancellableAndDisablesReportExport() async throws {
+        #expect(ScanStatusView.isCancellable(.verifyingDuplicates))
+        #expect(ContentView.isScanInProgress(.verifyingDuplicates))
+        #expect(!ContentView.isScanInProgress(.completed))
+    }
+
     @Test func healthyFolderGetsHighScoreAndLowRisk() async throws {
         let summary = FolderSummary(
             folderURL: URL(fileURLWithPath: "/tmp/Project"),
@@ -118,7 +124,7 @@ struct RunBoardTests {
         #expect(summary.largestFolders[1].totalSize == 300 * 1024 * 1024)
     }
 
-    @Test func analyzerFindsPotentialDuplicateFilesByNameAndSize() async throws {
+    @Test func analyzerDoesNotTreatMatchingNameAndSizeAsVerifiedDuplicates() async throws {
         let root = URL(fileURLWithPath: "/tmp/Workspace")
         let files = [
             folder("/tmp/Workspace/A"),
@@ -131,10 +137,30 @@ struct RunBoardTests {
 
         let summary = FolderAnalyzer.makeSummary(for: root, files: files, isDeepScan: true)
 
-        #expect(summary.duplicateGroups.count == 1)
-        #expect(summary.duplicateGroups[0].displayName == "photo.png")
-        #expect(summary.duplicateGroups[0].files.count == 2)
-        #expect(summary.duplicateGroups[0].recoverableSize == 5 * 1024 * 1024)
+        #expect(summary.duplicateGroups.isEmpty)
+        #expect(summary.recoverableSize == 0)
+    }
+
+    @Test func analyzerPublishesOnlyVerifiedDuplicateGroupsAndIssues() async throws {
+        let root = URL(fileURLWithPath: "/tmp/Workspace")
+        let first = file("/tmp/Workspace/A/photo.png", size: 5 * 1024 * 1024)
+        let second = file("/tmp/Workspace/B/renamed.png", size: 5 * 1024 * 1024)
+        let issue = DuplicateVerificationIssue(url: first.url, message: "Unreadable")
+        let verification = DuplicateVerificationResult(
+            groups: [.init(digest: "sha256", files: [first, second])],
+            issues: [issue]
+        )
+
+        let summary = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [first, second],
+            isDeepScan: true,
+            verification: verification
+        )
+
+        #expect(summary.duplicateGroups.map(\.digest) == ["sha256"])
+        #expect(summary.verificationIssues == [issue])
+        #expect(summary.recoverableSize == 5 * 1024 * 1024)
     }
 
     @Test func analyzerUsesCustomCleanupThresholds() async throws {

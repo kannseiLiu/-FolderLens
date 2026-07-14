@@ -34,6 +34,10 @@ struct ContentView: View {
     private var files: [FileItem] { scanModel.files }
     private var currentFolderSummary: FolderSummary? { scanModel.summary }
 
+    static func isScanInProgress(_ status: FolderScanStatus) -> Bool {
+        status == .scanning || status == .verifyingDuplicates
+    }
+
     private var scanSettings: ScanSettings {
         ScanSettings(
             largeFileThresholdMB: largeFileThresholdMB,
@@ -122,6 +126,7 @@ struct ContentView: View {
             ScanStatusView(
                 status: scanModel.status,
                 progress: scanModel.progress,
+                verificationProgress: scanModel.verificationProgress,
                 warningCount: scanModel.warnings.count,
                 onCancel: scanModel.cancel
             )
@@ -261,7 +266,7 @@ struct ContentView: View {
                 .disabled(
                     currentFolderURL == nil
                         || currentFolderSummary == nil
-                        || scanModel.status == .scanning
+                        || Self.isScanInProgress(scanModel.status)
                 )
 
                 Spacer()

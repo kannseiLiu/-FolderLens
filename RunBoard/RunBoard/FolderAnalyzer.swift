@@ -5,6 +5,7 @@ struct FolderAnalyzer {
         for folderURL: URL,
         files: [FileItem],
         isDeepScan: Bool,
+        verification: DuplicateVerificationResult = .empty,
         settings: ScanSettings = .default
     ) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
@@ -106,7 +107,8 @@ struct FolderAnalyzer {
             temporaryFiles: temporaryFiles,
             isDeepScan: isDeepScan,
             largestFolders: makeLargestFolders(root: folderURL, files: files),
-            duplicateGroups: makeDuplicateGroups(files: files),
+            duplicateGroups: verification.groups,
+            verificationIssues: verification.issues,
             settings: settings
         )
     }
@@ -147,30 +149,6 @@ struct FolderAnalyzer {
         }
         .prefix(8)
         .map { $0 }
-    }
-
-    private static func makeDuplicateGroups(files: [FileItem]) -> [DuplicateFileGroup] {
-        let groupedFiles = Dictionary(grouping: files.filter { !$0.isDirectory && $0.size > 0 }) { file in
-            "\(file.name.lowercased())|\(file.size)"
-        }
-
-        return groupedFiles.values
-            .filter { $0.count > 1 }
-            .map { group in
-                DuplicateFileGroup(
-                    displayName: group[0].name,
-                    files: group.sorted { $0.url.path < $1.url.path }
-                )
-            }
-            .sorted {
-                if $0.recoverableSize == $1.recoverableSize {
-                    return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
-                }
-
-                return $0.recoverableSize > $1.recoverableSize
-            }
-            .prefix(8)
-            .map { $0 }
     }
 
     private static func isTemporaryCandidate(_ file: FileItem) -> Bool {

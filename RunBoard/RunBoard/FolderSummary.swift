@@ -81,6 +81,7 @@ struct FolderSummary {
     let isDeepScan: Bool
     let largestFolders: [FolderHotspot]
     let duplicateGroups: [DuplicateFileGroup]
+    let verificationIssues: [DuplicateVerificationIssue]
     let settings: ScanSettings
 
     init(
@@ -106,6 +107,7 @@ struct FolderSummary {
         isDeepScan: Bool,
         largestFolders: [FolderHotspot] = [],
         duplicateGroups: [DuplicateFileGroup] = [],
+        verificationIssues: [DuplicateVerificationIssue] = [],
         settings: ScanSettings = .default
     ) {
         self.folderURL = folderURL
@@ -130,6 +132,7 @@ struct FolderSummary {
         self.isDeepScan = isDeepScan
         self.largestFolders = largestFolders
         self.duplicateGroups = duplicateGroups
+        self.verificationIssues = verificationIssues
         self.settings = settings
     }
 
