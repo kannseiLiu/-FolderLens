@@ -167,7 +167,7 @@ struct FolderSummary {
             return total + Int64(additionalCopies) * group.fileSize
         }
 
-        return temporarySize + duplicateSize
+        return min(temporarySize + duplicateSize, reviewableSize)
     }
 
     var formattedReviewableSize: String {

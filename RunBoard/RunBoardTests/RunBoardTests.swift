@@ -165,6 +165,90 @@ struct RunBoardTests {
         })
     }
 
+    @Test func analyzerNormalizesDuplicateGroupMembersAndRejectsInvalidGroups() async throws {
+        let root = URL(fileURLWithPath: "/tmp/Workspace")
+        let first = file("/tmp/Workspace/A/data.bin", size: 10 * 1024 * 1024)
+        let duplicatePath = file("/tmp/Workspace/A/./data.bin", size: 10 * 1024 * 1024)
+        let second = file("/tmp/Workspace/B/copy.bin", size: 10 * 1024 * 1024)
+        let zeroA = file("/tmp/Workspace/zero-a.bin", size: 0)
+        let zeroB = file("/tmp/Workspace/zero-b.bin", size: 0)
+        let single = file("/tmp/Workspace/single.bin", size: 10 * 1024 * 1024)
+        let mismatched = file("/tmp/Workspace/mismatched.bin", size: 20 * 1024 * 1024)
+
+        let baseline = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [first, second, zeroA, zeroB, single, mismatched],
+            isDeepScan: true
+        )
+        let summary = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [first, second, zeroA, zeroB, single, mismatched],
+            isDeepScan: true,
+            duplicateVerification: .init(
+                groups: [
+                    .init(digest: String(repeating: "d", count: 64), files: [first, duplicatePath, second]),
+                    .init(digest: String(repeating: "e", count: 64), files: [zeroA, zeroB]),
+                    .init(digest: String(repeating: "f", count: 64), files: [single]),
+                    .init(digest: String(repeating: "g", count: 64), files: [first, mismatched])
+                ],
+                issues: []
+            )
+        )
+
+        #expect(summary.duplicateGroups.map(\.digest) == [String(repeating: "d", count: 64)])
+        #expect(summary.duplicateGroups[0].files.map { $0.url.standardizedFileURL.path } == [
+            first.url.standardizedFileURL.path,
+            second.url.standardizedFileURL.path
+        ])
+        #expect(summary.healthScore == baseline.healthScore - 8)
+        #expect(summary.actionPlan.contains { $0.title == "Inspect 1 verified duplicate group" })
+        #expect(summary.reviewableSize == 20 * 1024 * 1024)
+        #expect(summary.recoverableSize == 10 * 1024 * 1024)
+    }
+
+    @Test func analyzerClaimsDuplicatePathsAcrossGroupsInStableOrder() async throws {
+        let root = URL(fileURLWithPath: "/tmp/Workspace")
+        let shared = file("/tmp/Workspace/shared.bin", size: 10 * 1024 * 1024)
+        let sharedAlternatePath = file("/tmp/Workspace/./shared.bin", size: 10 * 1024 * 1024)
+        let firstOnly = file("/tmp/Workspace/first-only.bin", size: 10 * 1024 * 1024)
+        let secondOnly = file("/tmp/Workspace/second-only.bin", size: 10 * 1024 * 1024)
+        let laterA = file("/tmp/Workspace/later-a.bin", size: 5 * 1024 * 1024)
+        let laterB = file("/tmp/Workspace/later-b.bin", size: 5 * 1024 * 1024)
+
+        let baseline = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [shared, firstOnly, secondOnly, laterA, laterB],
+            isDeepScan: true
+        )
+        let summary = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [shared, firstOnly, secondOnly, laterA, laterB],
+            isDeepScan: true,
+            duplicateVerification: .init(
+                groups: [
+                    .init(digest: String(repeating: "h", count: 64), files: [shared, firstOnly]),
+                    .init(digest: String(repeating: "i", count: 64), files: [sharedAlternatePath, secondOnly]),
+                    .init(digest: String(repeating: "j", count: 64), files: [laterA, laterB])
+                ],
+                issues: []
+            )
+        )
+
+        #expect(summary.duplicateGroups.map(\.digest) == [
+            String(repeating: "h", count: 64),
+            String(repeating: "j", count: 64)
+        ])
+        #expect(summary.duplicateGroups[0].files.map { $0.url.standardizedFileURL.path } == [
+            shared.url.standardizedFileURL.path,
+            firstOnly.url.standardizedFileURL.path
+        ])
+        #expect(summary.healthScore == baseline.healthScore - 16)
+        #expect(summary.actionPlan.contains { $0.title == "Inspect 2 verified duplicate groups" })
+        #expect(summary.reviewableSize == 30 * 1024 * 1024)
+        #expect(summary.recoverableSize == 15 * 1024 * 1024)
+        #expect(summary.recoverableSize <= summary.reviewableSize)
+    }
+
     @Test func summaryCountsOnlyVerifiedExtraCopiesAsRecoverable() async throws {
         let copies = [
             file("/tmp/Workspace/A/first.bin", size: 10 * 1024 * 1024),
