@@ -58,35 +58,6 @@ struct FolderHotspot: Identifiable, Equatable {
     }
 }
 
-struct DuplicateFileGroup: Identifiable, Equatable {
-    let displayName: String
-    let files: [FileItem]
-
-    var id: String {
-        "\(displayName.lowercased())-\(files.first?.size ?? 0)"
-    }
-
-    var fileSize: Int64 {
-        files.first?.size ?? 0
-    }
-
-    var totalSize: Int64 {
-        files.map(\.size).reduce(0, +)
-    }
-
-    var recoverableSize: Int64 {
-        max(totalSize - fileSize, 0)
-    }
-
-    var formattedFileSize: String {
-        ByteCountFormatter.string(fromByteCount: fileSize, countStyle: .file)
-    }
-
-    var formattedRecoverableSize: String {
-        ByteCountFormatter.string(fromByteCount: recoverableSize, countStyle: .file)
-    }
-}
-
 struct FolderSummary {
     let folderURL: URL
     let totalCount: Int
