@@ -149,21 +149,24 @@ struct FolderSummary {
     }
 
     var reviewableSize: Int64 {
-        var seenPaths: Set<String> = []
-        var total: Int64 = 0
-
-        for file in largeFiles + oldFiles + temporaryFiles {
-            if seenPaths.insert(file.url.path).inserted {
-                total += file.size
-            }
-        }
-
-        return total + duplicateGroups.map(\.recoverableSize).reduce(0, +)
+        uniqueFiles(in: largeFiles + oldFiles + temporaryFiles + duplicateGroups.flatMap(\.files))
+            .map(\.size)
+            .reduce(0, +)
     }
 
     var recoverableSize: Int64 {
-        let temporarySize = temporaryFiles.map(\.size).reduce(0, +)
-        let duplicateSize = duplicateGroups.map(\.recoverableSize).reduce(0, +)
+        let uniqueTemporaryFiles = uniqueFiles(in: temporaryFiles)
+        let temporaryPaths = Set(uniqueTemporaryFiles.map { $0.url.standardizedFileURL.path })
+        let temporarySize = uniqueTemporaryFiles.map(\.size).reduce(0, +)
+
+        let duplicateSize = duplicateGroups.reduce(Int64.zero) { total, group in
+            let temporaryMemberCount = group.files.filter {
+                temporaryPaths.contains($0.url.standardizedFileURL.path)
+            }.count
+            let additionalCopies = max((group.files.count - 1) - temporaryMemberCount, 0)
+            return total + Int64(additionalCopies) * group.fileSize
+        }
+
         return temporarySize + duplicateSize
     }
 
@@ -239,8 +242,8 @@ struct FolderSummary {
         if !duplicateGroups.isEmpty {
             actions.append(
                 FolderActionItem(
-                    title: "Inspect \(duplicateGroups.count) potential duplicate \(duplicateGroups.count == 1 ? "group" : "groups")",
-                    detail: "Files with the same name and size may be redundant copies.",
+                    title: "Inspect \(duplicateGroups.count) verified duplicate \(duplicateGroups.count == 1 ? "group" : "groups")",
+                    detail: "The contents matched by SHA-256.",
                     systemImage: "doc.on.doc"
                 )
             )
@@ -267,5 +270,13 @@ struct FolderSummary {
         }
 
         return actions
+    }
+
+    private func uniqueFiles(in files: [FileItem]) -> [FileItem] {
+        var seenPaths: Set<String> = []
+
+        return files.filter {
+            seenPaths.insert($0.url.standardizedFileURL.path).inserted
+        }
     }
 }

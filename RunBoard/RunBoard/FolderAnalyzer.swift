@@ -5,8 +5,8 @@ struct FolderAnalyzer {
         for folderURL: URL,
         files: [FileItem],
         isDeepScan: Bool,
-        verification: DuplicateVerificationResult = .empty,
-        settings: ScanSettings = .default
+        settings: ScanSettings = .default,
+        duplicateVerification: DuplicateVerificationResult = .empty
     ) -> FolderSummary {
         let folderCount = files.filter { $0.isDirectory }.count
         let imageCount = files.filter { $0.isImage }.count
@@ -107,9 +107,25 @@ struct FolderAnalyzer {
             temporaryFiles: temporaryFiles,
             isDeepScan: isDeepScan,
             largestFolders: makeLargestFolders(root: folderURL, files: files),
-            duplicateGroups: verification.groups,
-            verificationIssues: verification.issues,
+            duplicateGroups: duplicateVerification.groups,
+            verificationIssues: duplicateVerification.issues,
             settings: settings
+        )
+    }
+
+    static func makeSummary(
+        for folderURL: URL,
+        files: [FileItem],
+        isDeepScan: Bool,
+        verification: DuplicateVerificationResult,
+        settings: ScanSettings = .default
+    ) -> FolderSummary {
+        makeSummary(
+            for: folderURL,
+            files: files,
+            isDeepScan: isDeepScan,
+            settings: settings,
+            duplicateVerification: verification
         )
     }
 

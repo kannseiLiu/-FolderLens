@@ -124,7 +124,7 @@ struct RunBoardTests {
         #expect(summary.largestFolders[1].totalSize == 300 * 1024 * 1024)
     }
 
-    @Test func analyzerDoesNotTreatMatchingNameAndSizeAsVerifiedDuplicates() async throws {
+    @Test func analyzerNeverInfersDuplicatesWithoutVerification() async throws {
         let root = URL(fileURLWithPath: "/tmp/Workspace")
         let files = [
             folder("/tmp/Workspace/A"),
@@ -141,26 +141,66 @@ struct RunBoardTests {
         #expect(summary.recoverableSize == 0)
     }
 
-    @Test func analyzerPublishesOnlyVerifiedDuplicateGroupsAndIssues() async throws {
+    @Test func analyzerUsesVerifiedGroupsWithDifferentNames() async throws {
         let root = URL(fileURLWithPath: "/tmp/Workspace")
         let first = file("/tmp/Workspace/A/photo.png", size: 5 * 1024 * 1024)
         let second = file("/tmp/Workspace/B/renamed.png", size: 5 * 1024 * 1024)
-        let issue = DuplicateVerificationIssue(url: first.url, message: "Unreadable")
         let verification = DuplicateVerificationResult(
-            groups: [.init(digest: "sha256", files: [first, second])],
-            issues: [issue]
+            groups: [.init(digest: String(repeating: "a", count: 64), files: [first, second])],
+            issues: []
         )
 
         let summary = FolderAnalyzer.makeSummary(
             for: root,
             files: [first, second],
             isDeepScan: true,
-            verification: verification
+            duplicateVerification: verification
         )
 
-        #expect(summary.duplicateGroups.map(\.digest) == ["sha256"])
-        #expect(summary.verificationIssues == [issue])
+        #expect(summary.duplicateGroups.map(\.digest) == [String(repeating: "a", count: 64)])
         #expect(summary.recoverableSize == 5 * 1024 * 1024)
+        #expect(summary.actionPlan.contains {
+            $0.title == "Inspect 1 verified duplicate group"
+                && $0.detail == "The contents matched by SHA-256."
+        })
+    }
+
+    @Test func summaryCountsOnlyVerifiedExtraCopiesAsRecoverable() async throws {
+        let copies = [
+            file("/tmp/Workspace/A/first.bin", size: 10 * 1024 * 1024),
+            file("/tmp/Workspace/B/second.bin", size: 10 * 1024 * 1024),
+            file("/tmp/Workspace/C/third.bin", size: 10 * 1024 * 1024)
+        ]
+
+        let summary = makeSummary(
+            totalCount: copies.count,
+            totalSize: 30 * 1024 * 1024,
+            duplicateGroups: [.init(digest: String(repeating: "b", count: 64), files: copies)]
+        )
+
+        #expect(summary.recoverableSize == 20 * 1024 * 1024)
+    }
+
+    @Test func verificationIssuesDoNotReduceHealthScore() async throws {
+        let root = URL(fileURLWithPath: "/tmp/Workspace")
+        let unreadableFile = file("/tmp/Workspace/unreadable.bin", size: 1_024)
+        let issue = DuplicateVerificationIssue(url: unreadableFile.url, message: "Unreadable")
+
+        let baseline = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [unreadableFile],
+            isDeepScan: true
+        )
+        let summaryWithIssue = FolderAnalyzer.makeSummary(
+            for: root,
+            files: [unreadableFile],
+            isDeepScan: true,
+            duplicateVerification: .init(groups: [], issues: [issue])
+        )
+
+        #expect(summaryWithIssue.verificationIssues == [issue])
+        #expect(summaryWithIssue.healthScore == baseline.healthScore)
+        #expect(summaryWithIssue.recoverableSize == baseline.recoverableSize)
     }
 
     @Test func analyzerUsesCustomCleanupThresholds() async throws {
@@ -195,41 +235,63 @@ struct RunBoardTests {
         #expect(summary.settings == settings)
     }
 
-    @Test func summaryEstimatesReviewableAndRecoverableSpace() async throws {
-        let duplicateA = file("/tmp/Workspace/A/data.csv", size: 10 * 1024 * 1024)
-        let duplicateB = file("/tmp/Workspace/B/data.csv", size: 10 * 1024 * 1024)
-        let cacheFile = file("/tmp/Workspace/build.cache", size: 3 * 1024 * 1024)
-        let largeFile = file("/tmp/Workspace/video.mov", size: 180 * 1024 * 1024)
+    @Test func summaryUnionsOverlappingCleanupPathsAndCountsDuplicateExtrasPrecisely() async throws {
+        let temporaryDuplicate = file("/tmp/Workspace/cache.tmp", size: 10 * 1024 * 1024)
+        let alternateTemporaryDuplicate = file("/tmp/Workspace/./cache.tmp", size: 10 * 1024 * 1024)
+        let duplicateB = file("/tmp/Workspace/B/data-copy.bin", size: 10 * 1024 * 1024)
+        let duplicateC = file("/tmp/Workspace/C/archive.bin", size: 10 * 1024 * 1024)
+        let temporaryOnly = file("/tmp/Workspace/build.cache", size: 3 * 1024 * 1024)
+        let largeOnly = file("/tmp/Workspace/video.mov", size: 50 * 1024 * 1024)
 
-        let summary = FolderSummary(
+        let summary = makeSummary(
+            totalCount: 5,
+            totalSize: 83 * 1024 * 1024,
+            largeFiles: [alternateTemporaryDuplicate, largeOnly],
+            oldFiles: [duplicateB],
+            temporaryFiles: [temporaryDuplicate, temporaryOnly],
+            duplicateGroups: [
+                .init(
+                    digest: String(repeating: "c", count: 64),
+                    files: [temporaryDuplicate, duplicateB, duplicateC]
+                )
+            ]
+        )
+
+        #expect(summary.reviewableSize == 83 * 1024 * 1024)
+        #expect(summary.recoverableSize == 23 * 1024 * 1024)
+    }
+
+    private func makeSummary(
+        totalCount: Int,
+        totalSize: Int64,
+        largeFiles: [FileItem] = [],
+        oldFiles: [FileItem] = [],
+        temporaryFiles: [FileItem] = [],
+        duplicateGroups: [DuplicateFileGroup] = []
+    ) -> FolderSummary {
+        FolderSummary(
             folderURL: URL(fileURLWithPath: "/tmp/Workspace"),
-            totalCount: 4,
+            totalCount: totalCount,
             folderCount: 0,
             imageCount: 0,
-            csvCount: 2,
+            csvCount: 0,
             jsonCount: 0,
             textCount: 0,
             logCount: 0,
             pdfCount: 0,
             archiveCount: 0,
-            videoCount: 1,
+            videoCount: 0,
             codeCount: 0,
-            otherCount: 1,
-            totalSize: 203 * 1024 * 1024,
-            largestFiles: [largeFile],
+            otherCount: 0,
+            totalSize: totalSize,
+            largestFiles: largeFiles,
             recentFiles: [],
-            largeFiles: [largeFile],
-            oldFiles: [],
-            temporaryFiles: [cacheFile],
+            largeFiles: largeFiles,
+            oldFiles: oldFiles,
+            temporaryFiles: temporaryFiles,
             isDeepScan: true,
-            duplicateGroups: [
-                DuplicateFileGroup(displayName: "data.csv", files: [duplicateA, duplicateB])
-            ]
+            duplicateGroups: duplicateGroups
         )
-
-        #expect(summary.reviewableSize == 193 * 1024 * 1024)
-        #expect(summary.recoverableSize == 13 * 1024 * 1024)
-        #expect(summary.actionPlan.map(\.title).contains("Inspect 1 potential duplicate group"))
     }
 
     private func folder(_ path: String) -> FileItem {
