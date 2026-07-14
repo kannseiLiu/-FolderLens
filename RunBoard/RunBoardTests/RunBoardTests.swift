@@ -414,6 +414,39 @@ struct RunBoardTests {
         #expect(summary.recoverableSize == 23 * 1024 * 1024)
     }
 
+    @Test func summaryDoesNotDoubleCountHardLinkedTemporaryAliases() async throws {
+        let original = file(
+            "/tmp/Workspace/original.bin",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 10)
+        )
+        let temporaryAlias = file(
+            "/tmp/Workspace/alias.tmp",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 10)
+        )
+        let independentCopy = file(
+            "/tmp/Workspace/copy.bin",
+            size: 10 * 1024 * 1024,
+            identity: .init(systemNumber: 1, fileNumber: 11)
+        )
+
+        let summary = makeSummary(
+            totalCount: 3,
+            totalSize: 30 * 1024 * 1024,
+            temporaryFiles: [temporaryAlias],
+            duplicateGroups: [
+                .init(
+                    digest: String(repeating: "d", count: 64),
+                    files: [original, independentCopy]
+                )
+            ]
+        )
+
+        #expect(summary.reviewableSize == 20 * 1024 * 1024)
+        #expect(summary.recoverableSize == 10 * 1024 * 1024)
+    }
+
     private func makeSummary(
         totalCount: Int,
         totalSize: Int64,
@@ -457,13 +490,18 @@ struct RunBoardTests {
         )
     }
 
-    private func file(_ path: String, size: Int64) -> FileItem {
+    private func file(
+        _ path: String,
+        size: Int64,
+        identity: FileSystemIdentity? = nil
+    ) -> FileItem {
         FileItem(
             url: URL(fileURLWithPath: path),
             name: URL(fileURLWithPath: path).lastPathComponent,
             isDirectory: false,
             size: size,
-            modifiedDate: Date()
+            modifiedDate: Date(),
+            fileSystemIdentity: identity
         )
     }
 

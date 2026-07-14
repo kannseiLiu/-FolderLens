@@ -6,28 +6,67 @@
 //
 import Foundation
 
+struct FileSystemIdentity: Hashable, Sendable, CustomStringConvertible {
+    let systemNumber: UInt64
+    let fileNumber: UInt64
+
+    init(systemNumber: UInt64, fileNumber: UInt64) {
+        self.systemNumber = systemNumber
+        self.fileNumber = fileNumber
+    }
+
+    init(fileURL: URL) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        guard let identity = Self(attributes: attributes) else {
+            throw FileSystemIdentityError.unavailable
+        }
+        self = identity
+    }
+
+    private init?(attributes: [FileAttributeKey: Any]) {
+        guard let systemNumber = (attributes[.systemNumber] as? NSNumber)?.uint64Value,
+              let fileNumber = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value else {
+            return nil
+        }
+
+        self.systemNumber = systemNumber
+        self.fileNumber = fileNumber
+    }
+
+    var description: String {
+        "\(systemNumber):\(fileNumber)"
+    }
+}
+
+private enum FileSystemIdentityError: Error {
+    case unavailable
+}
+
 struct FileItem: Identifiable, Hashable, Sendable {
     let id = UUID()
     let url: URL
     let name: String
     let isDirectory: Bool
+    let isRegularFile: Bool
     let isSymbolicLink: Bool
     let size: Int64
     let modifiedDate: Date?
-    let fileSystemIdentity: String?
+    let fileSystemIdentity: FileSystemIdentity?
 
     init(
         url: URL,
         name: String,
         isDirectory: Bool,
+        isRegularFile: Bool? = nil,
         isSymbolicLink: Bool = false,
         size: Int64,
         modifiedDate: Date?,
-        fileSystemIdentity: String? = nil
+        fileSystemIdentity: FileSystemIdentity? = nil
     ) {
         self.url = url
         self.name = name
         self.isDirectory = isDirectory
+        self.isRegularFile = isRegularFile ?? !isDirectory
         self.isSymbolicLink = isSymbolicLink
         self.size = size
         self.modifiedDate = modifiedDate

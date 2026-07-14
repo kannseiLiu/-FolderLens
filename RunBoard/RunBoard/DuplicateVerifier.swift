@@ -19,15 +19,23 @@ struct DuplicateVerifier: DuplicateVerifying {
         files: [FileItem],
         onProgress: @escaping DuplicateVerificationProgressHandler
     ) async throws -> DuplicateVerificationResult {
-        let sizeCandidates = Dictionary(
-            grouping: files.filter { !$0.isDirectory && !$0.isSymbolicLink && $0.size > 0 },
+        let uniqueRegularFiles = coalescingFileSystemAliases(
+            in: files.filter {
+                !$0.isDirectory
+                    && $0.isRegularFile
+                    && !$0.isSymbolicLink
+                    && $0.size > 0
+                    && $0.fileSystemIdentity != nil
+            }
+        )
+
+        let candidates = Dictionary(
+            grouping: uniqueRegularFiles,
             by: \.size
         )
         .values
         .filter { $0.count > 1 }
         .flatMap { $0 }
-
-        let candidates = coalescingFileSystemAliases(in: sizeCandidates)
         .sorted { $0.url.standardizedFileURL.path < $1.url.standardizedFileURL.path }
 
         await onProgress(.init(completedFileCount: 0, totalFileCount: candidates.count))
@@ -105,7 +113,7 @@ struct DuplicateVerifier: DuplicateVerifying {
     }
 
     private func coalescingFileSystemAliases(in files: [FileItem]) -> [FileItem] {
-        var seenIdentities: Set<String> = []
+        var seenIdentities: Set<FileSystemIdentity> = []
         var result: [FileItem] = []
 
         for file in files {

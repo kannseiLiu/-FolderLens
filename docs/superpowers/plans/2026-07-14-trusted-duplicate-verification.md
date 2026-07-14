@@ -4,7 +4,7 @@
 
 **Goal:** Automatically stream SHA-256 hashes after each folder scan so FolderLens labels and counts only content-verified duplicate files.
 
-**Architecture:** Add a standalone `DuplicateVerifying` service that filters regular files by non-zero byte size, hashes only same-size candidates after coalescing hard-linked paths to the same file identity, and returns verified groups plus per-file issues. `FolderScanViewModel` coordinates metadata scanning and verification under one scan identifier, then passes trusted results into `FolderAnalyzer`; presentational views and a testable report builder consume the final summary.
+**Architecture:** Add a standalone `DuplicateVerifying` service that filters regular files by non-zero byte size and stable filesystem identity, hashes only same-size candidates after coalescing hard-linked paths to the same file identity, and returns verified groups plus per-file issues. `FolderScanViewModel` coordinates metadata scanning and verification under one scan identifier, then passes trusted results into `FolderAnalyzer`; presentational views and a testable report builder consume the final summary.
 
 **Tech Stack:** Swift 6, SwiftUI, Foundation `FileHandle`, CryptoKit `SHA256`, Swift Testing, XCTest UI tests, Xcode 16 synchronized groups, macOS 15 deployment target.
 
@@ -14,6 +14,7 @@
 - Empty files are excluded.
 - Only regular files in non-empty same-size groups are opened.
 - Symbolic links are excluded from duplicate verification, and hard links to the same underlying file do not inflate copy counts or recoverable bytes.
+- Files without stable filesystem identity are excluded from trusted duplicate estimates.
 - Hash files serially in 1 MiB chunks and never retain complete contents in memory.
 - Check cooperative cancellation before each file and between chunks.
 - Publish no partial summary after cancellation or scan replacement.

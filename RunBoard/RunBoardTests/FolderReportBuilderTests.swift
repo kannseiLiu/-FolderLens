@@ -185,8 +185,7 @@ struct FolderReportBuilderTests {
             isDirectory: false,
             isSymbolicLink: false,
             size: size,
-            modifiedDate: Date(timeIntervalSince1970: 0),
-            fileSystemIdentity: path
+            modifiedDate: Date(timeIntervalSince1970: 0)
         )
     }
 }

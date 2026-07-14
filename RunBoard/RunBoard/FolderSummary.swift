@@ -156,12 +156,12 @@ struct FolderSummary {
 
     var recoverableSize: Int64 {
         let uniqueTemporaryFiles = uniqueFiles(in: temporaryFiles)
-        let temporaryPaths = Set(uniqueTemporaryFiles.map { $0.url.standardizedFileURL.path })
+        let temporaryKeys = Set(uniqueTemporaryFiles.map { fileUniquenessKey(for: $0) })
         let temporarySize = uniqueTemporaryFiles.map(\.size).reduce(0, +)
 
         let duplicateSize = duplicateGroups.reduce(Int64.zero) { total, group in
             let temporaryMemberCount = group.files.filter {
-                temporaryPaths.contains($0.url.standardizedFileURL.path)
+                temporaryKeys.contains(fileUniquenessKey(for: $0))
             }.count
             let additionalCopies = max((group.files.count - 1) - temporaryMemberCount, 0)
             return total + Int64(additionalCopies) * group.fileSize
@@ -273,11 +273,18 @@ struct FolderSummary {
     }
 
     private func uniqueFiles(in files: [FileItem]) -> [FileItem] {
-        var seenPaths: Set<String> = []
+        var seenKeys: Set<String> = []
 
         return files.filter {
-            seenPaths.insert($0.url.standardizedFileURL.path).inserted
+            seenKeys.insert(fileUniquenessKey(for: $0)).inserted
         }
+    }
+
+    private func fileUniquenessKey(for file: FileItem) -> String {
+        if let identity = file.fileSystemIdentity {
+            return "identity:\(identity.description)"
+        }
+        return "path:\(file.url.standardizedFileURL.path)"
     }
 
     private static func normalizedDuplicateGroups(_ groups: [DuplicateFileGroup]) -> [DuplicateFileGroup] {

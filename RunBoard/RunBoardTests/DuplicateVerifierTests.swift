@@ -166,6 +166,42 @@ struct DuplicateVerifierTests {
         #expect(result.groups[0].recoverableSize == 14)
     }
 
+    @Test func hardLinkOnlyCandidatesAreNotOpened() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = try write("shared payload", to: root.appendingPathComponent("original.bin"))
+        let hardLink = root.appendingPathComponent("hard-link.bin")
+        try FileManager.default.linkItem(at: original, to: hardLink)
+        let openedURLs = OpenedURLRecorder()
+
+        let result = try await DuplicateVerifier(chunkObserver: { url, _ in
+            await openedURLs.append(url)
+        }).verify(
+            files: [item(original), item(hardLink)],
+            onProgress: { _ in }
+        )
+
+        #expect(result == .empty)
+        #expect(await openedURLs.values.isEmpty)
+    }
+
+    @Test func filesWithoutStableIdentityAreNotTrustedAsDuplicates() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = try write("same payload", to: root.appendingPathComponent("first.bin"))
+        let second = try write("same payload", to: root.appendingPathComponent("second.bin"))
+
+        let result = try await DuplicateVerifier().verify(
+            files: [
+                item(first, fileSystemIdentity: .some(nil)),
+                item(second, fileSystemIdentity: .some(nil))
+            ],
+            onProgress: { _ in }
+        )
+
+        #expect(result == .empty)
+    }
+
     @Test func symbolicLinksAreExcludedFromVerificationCandidates() async throws {
         let root = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -196,22 +232,33 @@ struct DuplicateVerifierTests {
         return url
     }
 
-    private func item(_ url: URL) -> FileItem {
+    private func item(
+        _ url: URL,
+        fileSystemIdentity: FileSystemIdentity?? = nil
+    ) -> FileItem {
         let values = try? url.resourceValues(forKeys: [
             .isDirectoryKey,
             .isSymbolicLinkKey,
+            .isRegularFileKey,
             .fileSizeKey,
-            .contentModificationDateKey,
-            .fileResourceIdentifierKey
+            .contentModificationDateKey
         ])
+        let identity: FileSystemIdentity?
+        switch fileSystemIdentity {
+        case .some(let override):
+            identity = override
+        case .none:
+            identity = try? FileSystemIdentity(fileURL: url)
+        }
         return FileItem(
             url: url,
             name: url.lastPathComponent,
             isDirectory: values?.isDirectory ?? false,
+            isRegularFile: values?.isRegularFile,
             isSymbolicLink: values?.isSymbolicLink ?? false,
             size: Int64(values?.fileSize ?? 0),
             modifiedDate: values?.contentModificationDate,
-            fileSystemIdentity: values?.fileResourceIdentifier.map { String(describing: $0) }
+            fileSystemIdentity: identity
         )
     }
 }

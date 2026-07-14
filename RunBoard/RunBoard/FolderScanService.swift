@@ -25,10 +25,10 @@ struct FolderScanService: FolderScanning {
         let manager = FileManager.default
         let keys: Set<URLResourceKey> = [
             .isDirectoryKey,
+            .isRegularFileKey,
             .isSymbolicLinkKey,
             .fileSizeKey,
-            .contentModificationDateKey,
-            .fileResourceIdentifierKey
+            .contentModificationDateKey
         ]
         var warnings: [FolderScanWarning] = []
 
@@ -106,10 +106,11 @@ struct FolderScanService: FolderScanning {
             url: url,
             name: url.lastPathComponent,
             isDirectory: values.isDirectory ?? false,
+            isRegularFile: values.isRegularFile,
             isSymbolicLink: values.isSymbolicLink ?? false,
             size: Int64(values.fileSize ?? 0),
             modifiedDate: values.contentModificationDate,
-            fileSystemIdentity: values.fileResourceIdentifier.map { String(describing: $0) }
+            fileSystemIdentity: try? FileSystemIdentity(fileURL: url)
         )
     }
 

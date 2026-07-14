@@ -51,7 +51,7 @@ Deep Scan turns FolderLens into a more useful cleanup assistant:
 - Keep the interface responsive while FolderLens analyzes nested content.
 - Folder Size Hotspots rank nested folders by total file size.
 - Non-empty, same-size regular-file candidates are read in bounded chunks and grouped only when their SHA-256 digests match.
-- Symbolic links are excluded from duplicate verification, and hard-linked paths to the same file identity are counted once.
+- Symbolic links are excluded from duplicate verification, hard-linked paths to the same file identity are counted once, and files without a stable filesystem identity are left out of trusted duplicate estimates.
 - Verified Duplicates show every matching path, per-file size, copy count, and recoverable size.
 - Verification Issues identify files that changed or could not be read; they are not labeled or counted as duplicates.
 - Hashing progress remains visible and cancellable as part of the active scan.
