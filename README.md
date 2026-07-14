@@ -50,7 +50,7 @@ Deep Scan turns FolderLens into a more useful cleanup assistant:
 
 - Keep the interface responsive while FolderLens analyzes nested content.
 - Folder Size Hotspots rank nested folders by total file size.
-- Same-size candidates are read in bounded chunks and grouped only when their SHA-256 digests match.
+- Non-empty, same-size candidates are read in bounded chunks and grouped only when their SHA-256 digests match.
 - Verified Duplicates show every matching path, per-file size, copy count, and recoverable size.
 - Verification Issues identify files that changed or could not be read; they are not labeled or counted as duplicates.
 - Hashing progress remains visible and cancellable as part of the active scan.
@@ -121,7 +121,7 @@ Core files:
 
 - `ContentView.swift`: folder selection, navigation, scanning, filtering, and Markdown export
 - `FolderReportBuilder.swift`: testable Markdown report composition
-- `DuplicateVerifier.swift`: bounded SHA-256 verification for same-size candidates
+- `DuplicateVerifier.swift`: bounded SHA-256 verification for non-empty, same-size candidates
 - `ScanSettings.swift`: persisted scan thresholds and hidden-file policy
 - `FolderSummary.swift`: summary data, health score, and action plan model
 - `FolderSummaryView.swift`: dashboard, statistics, cleanup suggestions, and health overview
