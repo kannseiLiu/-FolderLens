@@ -5,6 +5,7 @@
 //  Created by sheng on 2026/06/20.
 //
 import Foundation
+import Darwin
 
 struct FileSystemIdentity: Hashable, Sendable, CustomStringConvertible {
     let systemNumber: UInt64
@@ -21,6 +22,11 @@ struct FileSystemIdentity: Hashable, Sendable, CustomStringConvertible {
             throw FileSystemIdentityError.unavailable
         }
         self = identity
+    }
+
+    init(fileStatus: stat) {
+        self.systemNumber = UInt64(fileStatus.st_dev)
+        self.fileNumber = UInt64(fileStatus.st_ino)
     }
 
     private init?(attributes: [FileAttributeKey: Any]) {

@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 struct DuplicateVerifier: DuplicateVerifying {
@@ -86,16 +87,13 @@ struct DuplicateVerifier: DuplicateVerifying {
         guard let expectedIdentity = file.fileSystemIdentity else {
             throw VerificationError.metadataUnavailable
         }
-        let before = try metadata(for: file.url)
-        guard before.size == file.size, before.fileSystemIdentity == expectedIdentity else {
-            throw VerificationError.fileChanged
-        }
-        if let modifiedDate = file.modifiedDate, before.modifiedDate != modifiedDate {
-            throw VerificationError.fileChanged
-        }
-
         let handle = try FileHandle(forReadingFrom: file.url)
         defer { try? handle.close() }
+
+        let before = try metadata(for: handle)
+        guard before.matchesScannedFile(file, expectedIdentity: expectedIdentity) else {
+            throw VerificationError.fileChanged
+        }
 
         var hasher = SHA256()
         var chunkIndex = 0
@@ -108,7 +106,7 @@ struct DuplicateVerifier: DuplicateVerifying {
             try Task.checkCancellation()
         }
 
-        guard try metadata(for: file.url) == before else {
+        guard try metadata(for: handle) == before else {
             throw VerificationError.fileChanged
         }
 
@@ -131,17 +129,18 @@ struct DuplicateVerifier: DuplicateVerifying {
         return result
     }
 
-    private func metadata(for url: URL) throws -> FileMetadata {
-        var resourceURL = url
-        resourceURL.removeAllCachedResourceValues()
-        let values = try resourceURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
-        guard let size = values.fileSize else {
-            throw VerificationError.metadataUnavailable
+    private func metadata(for handle: FileHandle) throws -> FileMetadata {
+        var fileStatus = stat()
+        guard fstat(handle.fileDescriptor, &fileStatus) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         return FileMetadata(
-            size: Int64(size),
-            modifiedDate: values.contentModificationDate,
-            fileSystemIdentity: try FileSystemIdentity(fileURL: url)
+            size: Int64(fileStatus.st_size),
+            modifiedDate: Date(
+                timeIntervalSince1970: TimeInterval(fileStatus.st_mtimespec.tv_sec)
+                    + TimeInterval(fileStatus.st_mtimespec.tv_nsec) / 1_000_000_000
+            ),
+            fileSystemIdentity: FileSystemIdentity(fileStatus: fileStatus)
         )
     }
 
@@ -158,9 +157,21 @@ struct DuplicateVerifier: DuplicateVerifying {
 }
 
 private struct FileMetadata: Equatable {
+    private static let modificationDateTolerance: TimeInterval = 0.001
+
     let size: Int64
     let modifiedDate: Date?
     let fileSystemIdentity: FileSystemIdentity
+
+    func matchesScannedFile(_ file: FileItem, expectedIdentity: FileSystemIdentity) -> Bool {
+        guard size == file.size, fileSystemIdentity == expectedIdentity else {
+            return false
+        }
+        guard let scannedModifiedDate = file.modifiedDate, let modifiedDate else {
+            return true
+        }
+        return abs(modifiedDate.timeIntervalSince(scannedModifiedDate)) <= Self.modificationDateTolerance
+    }
 }
 
 private enum VerificationError: LocalizedError {
