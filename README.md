@@ -17,9 +17,10 @@ It helps you answer the questions Finder does not surface quickly: what is takin
 - See file type distribution, largest files, recently modified files, and safe cleanup candidates.
 - Get a Folder Health Score with a prioritized action plan.
 - Find folder size hotspots during Deep Scan.
-- Detect potential duplicate files by matching file name and size.
-- Estimate reviewable space and conservative recoverable space.
-- Export a Markdown report that includes health score, cleanup suggestions, top files, and a full file list.
+- Automatically verify duplicate content with streamed SHA-256 hashing, even when file names differ.
+- Follow verification progress, cancel hashing with the same scan control, and review files that could not be verified.
+- Estimate reviewable space and conservative recoverable space using only verified duplicate groups.
+- Export a Markdown report that includes health score, verified duplicates, verification issues, cleanup suggestions, top files, and a full file list.
 
 ## Folder Health Score
 
@@ -49,9 +50,12 @@ Deep Scan turns FolderLens into a more useful cleanup assistant:
 
 - Keep the interface responsive while FolderLens analyzes nested content.
 - Folder Size Hotspots rank nested folders by total file size.
-- Potential Duplicates group files with the same name and size for manual review.
+- Same-size candidates are read in bounded chunks and grouped only when their SHA-256 digests match.
+- Verified Duplicates show every matching path, per-file size, copy count, and recoverable size.
+- Verification Issues identify files that changed or could not be read; they are not labeled or counted as duplicates.
+- Hashing progress remains visible and cancellable as part of the active scan.
 - Review Size estimates how much data deserves attention across large, old, temporary, and duplicate candidates.
-- Recoverable estimates a conservative cleanup amount from temporary files and extra duplicate copies.
+- Recoverable estimates a conservative cleanup amount from temporary files and extra SHA-256-verified copies without double-counting overlapping paths.
 
 ## Screenshots
 
@@ -116,6 +120,8 @@ RunBoard/
 Core files:
 
 - `ContentView.swift`: folder selection, navigation, scanning, filtering, and Markdown export
+- `FolderReportBuilder.swift`: testable Markdown report composition
+- `DuplicateVerifier.swift`: bounded SHA-256 verification for same-size candidates
 - `ScanSettings.swift`: persisted scan thresholds and hidden-file policy
 - `FolderSummary.swift`: summary data, health score, and action plan model
 - `FolderSummaryView.swift`: dashboard, statistics, cleanup suggestions, and health overview

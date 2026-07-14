@@ -19,6 +19,10 @@ struct FolderSummaryView: View {
 
                 duplicateFilesCard
 
+                if !summary.verificationIssues.isEmpty {
+                    verificationIssuesCard
+                }
+
                 fileTypeBreakdownCard
 
                 largestFilesCard
@@ -29,6 +33,7 @@ struct FolderSummaryView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .accessibilityIdentifier("folder-summary")
     }
 
     // MARK: - Header
@@ -393,17 +398,45 @@ struct FolderSummaryView: View {
         CardView {
             VStack(alignment: .leading, spacing: 16) {
                 SectionHeader(
-                    title: "Potential Duplicates",
-                    subtitle: "Files with matching names and sizes. Review before deleting anything.",
-                    icon: "doc.on.doc"
+                    title: "Verified Duplicates",
+                    subtitle: "SHA-256 verified content matches. Review every path before deleting anything.",
+                    icon: "checkmark.seal.fill"
                 )
 
                 if summary.duplicateGroups.isEmpty {
-                    EmptyRankingView(text: "No potential duplicate groups found.")
+                    EmptyRankingView(text: "No verified duplicate groups found.")
                 } else {
-                    VStack(spacing: 14) {
-                        ForEach(summary.duplicateGroups) { group in
+                    VStack(spacing: 0) {
+                        ForEach(Array(summary.duplicateGroups.enumerated()), id: \.element.id) { index, group in
                             DuplicateGroupRow(group: group)
+
+                            if index != summary.duplicateGroups.count - 1 {
+                                Divider()
+                                    .padding(.leading, 36)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var verificationIssuesCard: some View {
+        CardView {
+            VStack(alignment: .leading, spacing: 16) {
+                SectionHeader(
+                    title: "Verification Issues",
+                    subtitle: "Files that could not be verified and are not counted as duplicates.",
+                    icon: "exclamationmark.triangle.fill"
+                )
+
+                VStack(spacing: 0) {
+                    ForEach(Array(summary.verificationIssues.enumerated()), id: \.element.id) { index, issue in
+                        VerificationIssueRow(issue: issue)
+
+                        if index != summary.verificationIssues.count - 1 {
+                            Divider()
+                                .padding(.leading, 36)
                         }
                     }
                 }
@@ -808,44 +841,75 @@ struct DuplicateGroupRow: View {
     let group: DuplicateFileGroup
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: "doc.on.doc")
+                Image(systemName: "checkmark.seal.fill")
                     .frame(width: 24)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.green)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(group.displayName)
                         .font(.headline)
                         .lineLimit(1)
 
-                    Text("\(group.files.count) copies · \(group.formattedFileSize) each")
+                    Text("SHA-256 verified · \(group.files.count) copies · \(group.formattedFileSize) each")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Spacer()
 
-                Text(group.formattedRecoverableSize)
-                    .font(.headline)
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text("Recoverable")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Text(group.formattedRecoverableSize)
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                        .lineLimit(1)
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(group.files.prefix(3)) { file in
+                ForEach(group.files) { file in
                     Text(file.url.path)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
             }
             .padding(.leading, 36)
         }
-        .padding(14)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, 10)
+    }
+}
+
+struct VerificationIssueRow: View {
+    let issue: DuplicateVerificationIssue
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle")
+                .frame(width: 24)
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(issue.url.path)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+
+                Text(issue.message)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 10)
     }
 }
 

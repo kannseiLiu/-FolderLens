@@ -165,6 +165,7 @@ struct ContentView: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
+        .accessibilityIdentifier("select-folder-button")
         .padding(.horizontal)
     }
 
@@ -402,7 +403,7 @@ struct ContentView: View {
             return
         }
 
-        let markdown = makeMarkdownReport(summary: summary, files: files)
+        let markdown = FolderReportBuilder().makeMarkdown(summary: summary, files: files)
 
         let savePanel = NSSavePanel()
         savePanel.title = "Export FolderLens Report"
@@ -416,187 +417,6 @@ struct ContentView: View {
                 print("Failed to export Markdown report: \(error)")
             }
         }
-    }
-
-    private func makeMarkdownReport(summary: FolderSummary, files: [FileItem]) -> String {
-        let generatedAt = formattedCurrentDate()
-
-        let sortedFiles = files.sorted { first, second in
-            if first.isDirectory != second.isDirectory {
-                return first.isDirectory && !second.isDirectory
-            }
-            return first.name.lowercased() < second.name.lowercased()
-        }
-
-        let largestRows = summary.largestFiles.map { file in
-            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
-        }
-        .joined(separator: "\n")
-
-        let recentRows = summary.recentFiles.map { file in
-            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedModifiedDate)) | \(escapeMarkdownTable(file.formattedSize)) |"
-        }
-        .joined(separator: "\n")
-        let largeCleanupRows = summary.largeFiles.map { file in
-            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
-        }
-        .joined(separator: "\n")
-
-        let oldCleanupRows = summary.oldFiles.map { file in
-            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedModifiedDate)) | \(escapeMarkdownTable(file.formattedSize)) |"
-        }
-        .joined(separator: "\n")
-
-        let temporaryCleanupRows = summary.temporaryFiles.map { file in
-            "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.formattedSize)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
-        }
-        .joined(separator: "\n")
-
-        let actionPlanRows = summary.actionPlan.map { action in
-            "| \(escapeMarkdownTable(action.title)) | \(escapeMarkdownTable(action.detail)) |"
-        }
-        .joined(separator: "\n")
-
-        let folderHotspotRows = summary.largestFolders.map { folder in
-            "| \(escapeMarkdownTable(folder.name)) | \(escapeMarkdownTable(folder.formattedSize)) | \(folder.fileCount) | `\(escapeMarkdownTable(folder.url.path))` |"
-        }
-        .joined(separator: "\n")
-
-        let duplicateRows = summary.duplicateGroups.map { group in
-            let paths = group.files
-                .prefix(3)
-                .map { "`\(escapeMarkdownTable($0.url.path))`" }
-                .joined(separator: "<br>")
-
-            return "| \(escapeMarkdownTable(group.displayName)) | \(group.files.count) | \(escapeMarkdownTable(group.formattedFileSize)) | \(escapeMarkdownTable(group.formattedRecoverableSize)) | \(paths) |"
-        }
-        .joined(separator: "\n")
-
-        let allFileRows = sortedFiles.map { file in
-            let sizeText = file.isDirectory ? "-" : file.formattedSize
-            return "| \(escapeMarkdownTable(file.name)) | \(escapeMarkdownTable(file.typeDescription)) | \(escapeMarkdownTable(sizeText)) | \(escapeMarkdownTable(file.formattedModifiedDate)) |"
-        }
-        .joined(separator: "\n")
-
-        return """
-        # FolderLens Report
-
-        Generated at: \(generatedAt)
-
-        Path: `\(summary.folderURL.path)`
-
-        Scan mode: \(summary.isDeepScan ? "Deep Scan" : "Current folder only")
-
-        ## Folder Health
-
-        | Metric | Value |
-        |---|---:|
-        | Health score | \(summary.healthScore) / 100 |
-        | Status | \(summary.healthSummary) |
-        | Cleanup candidates | \(summary.cleanupCandidateCount) |
-        | Review size | \(summary.formattedReviewableSize) |
-        | Recoverable estimate | \(summary.formattedRecoverableSize) |
-
-        ## Scan Settings
-
-        | Setting | Value |
-        |---|---:|
-        | Large file threshold | \(summary.settings.largeFileThresholdMB) MB |
-        | Old file threshold | \(summary.settings.oldFileAgeYears) \(summary.settings.oldFileAgeYears == 1 ? "year" : "years") |
-        | Hidden files | \(summary.settings.includeHiddenFiles ? "Included" : "Skipped") |
-
-        ## Action Plan
-
-        | Step | Why it matters |
-        |---|---|
-        \(actionPlanRows)
-
-        ## Overview
-
-        | Metric | Value |
-        |---|---:|
-        | Total size | \(summary.formattedTotalSize) |
-        | Total items | \(summary.totalCount) |
-        | Folders | \(summary.folderCount) |
-        | Images | \(summary.imageCount) |
-        | PDFs | \(summary.pdfCount) |
-        | CSV files | \(summary.csvCount) |
-        | JSON files | \(summary.jsonCount) |
-        | Text / Markdown files | \(summary.textCount) |
-        | Log files | \(summary.logCount) |
-        | Code files | \(summary.codeCount) |
-        | Videos | \(summary.videoCount) |
-        | Archives | \(summary.archiveCount) |
-        | Other files | \(summary.otherCount) |
-        
-        ## Folder Size Hotspots
-
-        | Folder | Size | Files | Path |
-        |---|---:|---:|---|
-        \(folderHotspotRows.isEmpty ? "| No folder hotspots found | - | - | - |" : folderHotspotRows)
-
-        ## Potential Duplicates
-
-        | Name | Copies | Size each | Recoverable | Sample paths |
-        |---|---:|---:|---:|---|
-        \(duplicateRows.isEmpty ? "| No potential duplicates found | - | - | - | - |" : duplicateRows)
-
-        ## Cleanup Suggestions
-
-        FolderLens only provides safe suggestions and never deletes files automatically.
-
-        ### Large files over \(summary.settings.largeFileThresholdMB) MB
-
-        | Name | Size | Modified |
-        |---|---:|---|
-        \(largeCleanupRows.isEmpty ? "| No candidates | - | - |" : largeCleanupRows)
-
-        ### Old files not modified for \(summary.settings.oldFileAgeYears) \(summary.settings.oldFileAgeYears == 1 ? "year" : "years")
-
-        | Name | Modified | Size |
-        |---|---|---:|
-        \(oldCleanupRows.isEmpty ? "| No candidates | - | - |" : oldCleanupRows)
-
-        ### Temporary / cache-like files
-
-        | Name | Size | Modified |
-        |---|---:|---|
-        \(temporaryCleanupRows.isEmpty ? "| No candidates | - | - |" : temporaryCleanupRows)
-        ## Largest Files
-
-        | Name | Size | Modified |
-        |---|---:|---|
-        \(largestRows.isEmpty ? "| No files found | - | - |" : largestRows)
-
-        ## Recently Modified Files
-
-        | Name | Modified | Size |
-        |---|---|---:|
-        \(recentRows.isEmpty ? "| No files found | - | - |" : recentRows)
-
-        ## Full File List
-
-        | Name | Type | Size | Modified |
-        |---|---|---:|---|
-        \(allFileRows.isEmpty ? "| No files found | - | - | - |" : allFileRows)
-
-        ---
-
-        Generated by FolderLens.
-        """
-    }
-
-    private func formattedCurrentDate() -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: Date())
-    }
-
-    private func escapeMarkdownTable(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "|", with: "\\|")
-            .replacingOccurrences(of: "\n", with: " ")
     }
 
     private func iconName(for file: FileItem) -> String {

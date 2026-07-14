@@ -2,6 +2,13 @@
 
 FolderLens is moving toward a practical, polished macOS utility for local folder understanding and cleanup review.
 
+## Completed Product Behavior
+
+- Automatically verify same-size candidates with bounded, streamed SHA-256 reads.
+- Show verification progress and cancellation as part of the scan lifecycle.
+- Label and count only SHA-256-matching files as duplicates, while surfacing per-file verification issues.
+- Use verified groups for conservative recoverable-space estimates and Markdown reports.
+
 ## Near Term
 
 - Add real screenshots to the README.
@@ -13,12 +20,12 @@ FolderLens is moving toward a practical, polished macOS utility for local folder
 
 ## Product Improvements
 
-- Upgrade duplicate detection from name/size matching to trusted SHA-256 content verification.
+- Add Cleanup Closure: review selections and totals, run preflight checks and confirmation, move approved files to Trash, report results, and rescan automatically.
 - Add export options for CSV and JSON.
 - Add reusable scan presets for common workflows such as Downloads cleanup, project audit, and photo archive review.
 
 ## Quality Improvements
 
-- Expand unit tests for scanning and report generation.
+- Expand unit tests for scanning and report edge cases.
 - Add UI tests for selecting a folder and exporting a report.
 - Harden GitHub Actions once the signing/build environment is finalized.

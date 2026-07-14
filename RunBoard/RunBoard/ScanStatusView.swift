@@ -19,7 +19,7 @@ struct ScanStatusView: View {
                     .controlSize(.small)
                 Text(status == .scanning
                     ? "Scanning \(progress?.processedItemCount ?? 0) items"
-                    : "Verifying duplicates \(verificationProgress?.completedFileCount ?? 0) of \(verificationProgress?.totalFileCount ?? 0) files"
+                    : "Verifying duplicates \(verificationProgress?.completedFileCount ?? 0) of \(verificationProgress?.totalFileCount ?? 0)"
                 )
                     .font(.caption)
                     .foregroundStyle(.secondary)

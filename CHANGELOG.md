@@ -10,7 +10,10 @@ All notable changes to FolderLens will be documented in this file.
 - Added health levels: Excellent, Good, Needs review, and Critical.
 - Added an Action Plan that prioritizes large files, old files, temporary files, and uncategorized items.
 - Added Folder Size Hotspots for ranking nested folders by disk usage.
-- Added Potential Duplicates based on matching file name and file size.
+- Added automatic SHA-256 verification for same-size duplicate candidates, including differently named files.
+- Added bounded, chunked file reads so duplicate verification does not load entire files into memory.
+- Added visible duplicate-verification progress and cancellation through the existing scan control.
+- Added Verification Issues to the summary and Markdown report for files that changed or could not be hashed.
 - Added reviewable and recoverable space estimates.
 - Added configurable scan settings for large files, old files, and hidden files.
 - Added health score and action plan sections to exported Markdown reports.
@@ -22,11 +25,14 @@ All notable changes to FolderLens will be documented in this file.
 - Added background folder scanning with live processed-item progress and cancellation.
 - Added protection against stale scan results when folders or settings change.
 - Added user-visible scan warnings and root-folder errors.
+- Added focused Markdown report tests and a UI launch assertion for the folder-selection control.
 
 ### Changed
 
 - Updated the folder summary dashboard to surface health and next steps near the top.
 - Extracted folder summary logic into a reusable analyzer for test coverage.
 - Updated cleanup labels and action plan text to follow the user's scan settings.
+- Updated duplicate summaries and reports to use verified-only terminology, list every verified path, and count only trusted extra copies in conservative recoverable estimates.
+- Extracted Markdown composition into `FolderReportBuilder` for direct unit testing.
 - Set the generated app display name to FolderLens.
 - Reworked the README around real product value, usage, safety, tests, and roadmap.
